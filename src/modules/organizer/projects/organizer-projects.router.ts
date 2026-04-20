@@ -1,0 +1,69 @@
+import { Request, Response, Router } from "express";
+import { authenticate, requireRole } from "../../../middleware/auth";
+import { validate } from "../../../middleware/validate";
+import { buildMeta, parsePagination } from "../../../utils/pagination";
+import { p, q } from "../../../utils/request";
+import { sendSuccess } from "../../../utils/response";
+import { createTaskSchema, updateTaskStatusSchema } from "./organizer-projects.schema";
+import {
+  createTask,
+  deleteTask,
+  getKanban,
+  getTask,
+  listOrganizerProjects,
+  updateTask,
+  updateTaskStatus,
+} from "./organizer-projects.service";
+
+export const organizerProjectsRouter = Router();
+organizerProjectsRouter.use(authenticate, requireRole("organizer", "admin"));
+
+// GET /api/organizer/projects
+organizerProjectsRouter.get("/", async (req: Request, res: Response) => {
+  const data = await listOrganizerProjects(req.user!.userId);
+  sendSuccess(res, { data });
+});
+
+// GET /api/organizer/projects/:projectId/kanban
+organizerProjectsRouter.get("/:projectId/kanban", async (req: Request, res: Response) => {
+  const data = await getKanban(p(req, "projectId"), req.user!.userId);
+  sendSuccess(res, { data });
+});
+
+// POST /api/organizer/tasks
+organizerProjectsRouter.post(
+  "/tasks",
+  validate(createTaskSchema),
+  async (req: Request, res: Response) => {
+    const data = await createTask(req.body, req.user!.userId);
+    sendSuccess(res, { data, status: 201 });
+  },
+);
+
+// GET /api/organizer/tasks/:taskId
+organizerProjectsRouter.get("/tasks/:taskId", async (req: Request, res: Response) => {
+  const data = await getTask(p(req, "taskId"));
+  sendSuccess(res, { data });
+});
+
+// PUT /api/organizer/tasks/:taskId
+organizerProjectsRouter.put("/tasks/:taskId", async (req: Request, res: Response) => {
+  const data = await updateTask(p(req, "taskId"), req.body);
+  sendSuccess(res, { data });
+});
+
+// PATCH /api/organizer/tasks/:taskId/status
+organizerProjectsRouter.patch(
+  "/tasks/:taskId/status",
+  validate(updateTaskStatusSchema),
+  async (req: Request, res: Response) => {
+    const data = await updateTaskStatus(p(req, "taskId"), req.body, req.user!.userId);
+    sendSuccess(res, { data });
+  },
+);
+
+// DELETE /api/organizer/tasks/:taskId
+organizerProjectsRouter.delete("/tasks/:taskId", async (req: Request, res: Response) => {
+  await deleteTask(p(req, "taskId"));
+  sendSuccess(res, { data: { deleted: true } });
+});

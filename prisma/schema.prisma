@@ -3,14 +3,635 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlserver"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
+// NOTE: Switched to MySQL. Provider-specific annotations removed.
+// See src/types/enums.ts for TypeScript enum constants.
+
+// ─── Identity & Access ───────────────────────────────────────────────────────
+
 model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         String   // admin | organizer | customer | staff
+  status       String   @default("active")  // active | inactive | suspended
+  displayName  String
+  phone        String?
+  avatarUrl    String?
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  customerProfile  CustomerProfile?
+  organizerProfile OrganizerProfile?
+  adminProfile     AdminProfile?
+  staffProfile     StaffProfile?
+
+  managedRequests   ConsultationRequest[] @relation("AssignedManager")
+  customerRequests  ConsultationRequest[] @relation("CustomerRequest")
+  ownedEvents       Event[]               @relation("CustomerEvent")
+  organizedEvents   Event[]               @relation("OrganizerEvent")
+  assignedTasks     ProjectTask[]         @relation("TaskAssignee")
+  createdTasks      ProjectTask[]         @relation("TaskCreator")
+  taskHistories     TaskStatusHistory[]
+  staffAssignments  EventStaffAssignment[]
+  shifts            ShiftSchedule[]
+  createdContracts  Contract[]            @relation("ContractCreator")
+  customerContracts Contract[]            @relation("ContractCustomer")
+  uploadedDocuments Document[]
+  approvedReviews   Review[]              @relation("ReviewApprover")
+  customerReviews   Review[]              @relation("CustomerReview")
+  chatMessages      ChatMessage[]
+  chatMemberships   ChatThreadMember[]
+  notifications     Notification[]
+  blogPostsCreated  BlogPost[]            @relation("BlogCreator")
+  blogPostsUpdated  BlogPost[]            @relation("BlogUpdater")
+  eventActivities   EventActivity[]
+
+  @@map("users")
+}
+
+model CustomerProfile {
+  userId    String    @id
+  fullName  String
+  address   String?
+  bio       String?
+  birthDate DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("customer_profiles")
+}
+
+model OrganizerProfile {
+  userId   String  @id
+  fullName String
+  jobTitle String
+  address  String?
+  bio      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("organizer_profiles")
+}
+
+model AdminProfile {
+  userId   String  @id
+  fullName String
+  address  String?
+  bio      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("admin_profiles")
+}
+
+model StaffProfile {
+  userId           String  @id
+  fullName         String
+  jobTitle         String
+  address          String?
+  employmentStatus String
+
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("staff_profiles")
+}
+
+// ─── Public Content ───────────────────────────────────────────────────────────
+
+model ServiceCategory {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+
+  services Service[]
+
+  @@map("service_categories")
+}
+
+model Service {
+  id               String   @id @default(uuid())
+  categoryId       String
+  title            String
+  slug             String   @unique
+  shortDescription String
+  description      String
+  priceFrom        Decimal?
+  priceTo          Decimal?
+  guestFrom        Int?
+  guestTo          Int?
+  locationText     String?
+  coverImageUrl    String?
+  isFeatured       Boolean  @default(false)
+  isActive         Boolean  @default(true)
+
+  category ServiceCategory @relation(fields: [categoryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("services")
+}
+
+model PortfolioItem {
+  id            String   @id @default(uuid())
+  title         String
+  slug          String   @unique
+  category      String
+  guestCount    Int?
+  coverImageUrl String
+  status        String   @default("visible")  // visible | hidden
+  viewCount     Int      @default(0)
+  eventId       String?
+  publishedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  event Event? @relation(fields: [eventId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("portfolio_items")
+}
+
+model BlogPost {
+  id            String    @id @default(uuid())
+  title         String
+  slug          String    @unique
+  category      String
+  excerpt       String?
+  content       String?
+  coverImageUrl String?
+  status        String    @default("draft")  // draft | scheduled | published | hidden
+  viewCount     Int       @default(0)
+  publishedAt   DateTime?
+  createdById   String
+  updatedById   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  createdBy User  @relation("BlogCreator", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  updatedBy User? @relation("BlogUpdater", fields: [updatedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("blog_posts")
+}
+
+model Testimonial {
+  id           String  @id @default(uuid())
+  customerName String
+  roleText     String
+  content      String
+  rating       Int
+  isFeatured   Boolean @default(false)
+  isActive     Boolean @default(true)
+
+  @@map("testimonials")
+}
+
+// ─── Lead Intake ─────────────────────────────────────────────────────────────
+
+model ConsultationRequest {
+  id                String    @id @default(uuid())
+  requestCode       String    @unique
+  customerName      String
+  phone             String
+  email             String
+  eventType         String
+  eventDate         DateTime?
+  guestCount        Int?
+  budgetRange       String?
+  locationText      String?
+  note              String?
+  status            String    @default("new") // new | reviewing | quoted | confirmed | rejected
+  assignedManagerId String?
+  customerUserId    String?
+  quotedAt          DateTime?
+  confirmedAt       DateTime?
+  rejectedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  assignedManager User?  @relation("AssignedManager", fields: [assignedManagerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customerUser    User?  @relation("CustomerRequest", fields: [customerUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  events          Event[]
+
+  @@map("consultation_requests")
+}
+
+// ─── Events ───────────────────────────────────────────────────────────────────
+
+model Event {
+  id                    String    @id @default(uuid())
+  name                  String
+  slug                  String?   @unique
+  type                  String
+  status                String    @default("draft") // draft|planning|quoted|contracted|in_progress|completed|cancelled
+  customerUserId        String
+  organizerUserId       String?
+  consultationRequestId String?
+  eventDate             DateTime?
+  locationText          String?
+  guestCount            Int?
+  budgetEstimated       Decimal?
+  budgetActual          Decimal?
+  progressPercent       Int       @default(0)
+  summary               String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  completedAt           DateTime?
+
+  customerUser        User                 @relation("CustomerEvent", fields: [customerUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organizerUser       User?                @relation("OrganizerEvent", fields: [organizerUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  consultationRequest ConsultationRequest? @relation(fields: [consultationRequestId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  milestones       EventMilestone[]
+  activities       EventActivity[]
+  tasks            ProjectTask[]
+  vendors          EventVendor[]
+  staffAssignments EventStaffAssignment[]
+  contracts        Contract[]
+  documents        Document[]
+  transactions     Transaction[]
+  budgets          ProjectBudget[]
+  reviews          Review[]
+  chatThreads      ChatThread[]
+  portfolioItems   PortfolioItem[]
+  shifts           ShiftSchedule[]
+
+  @@map("events")
+}
+
+model EventMilestone {
+  id            String    @id @default(uuid())
+  eventId       String
+  title         String
+  description   String?
+  milestoneDate DateTime?
+  status        String    @default("todo") // todo | in_progress | done
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("event_milestones")
+}
+
+model EventActivity {
+  id          String   @id @default(uuid())
+  eventId     String
+  actorUserId String?
+  iconName    String?
+  message     String
+  createdAt   DateTime @default(now())
+
+  event     Event @relation(fields: [eventId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  actorUser User? @relation(fields: [actorUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("event_activities")
+}
+
+// ─── Tasks ────────────────────────────────────────────────────────────────────
+
+model ProjectTask {
+  id             String    @id @default(uuid())
+  eventId        String
+  title          String
+  description    String?
+  status         String    @default("todo")     // todo | in_progress | review | done
+  priority       String    @default("medium")   // low | medium | high
+  assigneeUserId String?
+  dueAt          DateTime?
+  sortOrder      Int       @default(0)
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  completedAt    DateTime?
+
+  event           Event               @relation(fields: [eventId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  assignee        User?               @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdBy       User                @relation("TaskCreator", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  statusHistories TaskStatusHistory[]
+
+  @@map("project_tasks")
+}
+
+model TaskStatusHistory {
+  id          String   @id @default(uuid())
+  taskId      String
+  fromStatus  String?
+  toStatus    String
+  changedById String
+  changedAt   DateTime @default(now())
+
+  task      ProjectTask @relation(fields: [taskId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  changedBy User        @relation(fields: [changedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("task_status_histories")
+}
+
+// ─── Vendors ─────────────────────────────────────────────────────────────────
+
+model VendorCategory {
+  id       String  @id @default(uuid())
+  name     String
+  slug     String  @unique
+  isActive Boolean @default(true)
+
+  vendors Vendor[]
+
+  @@map("vendor_categories")
+}
+
+model Vendor {
+  id          String   @id @default(uuid())
+  name        String
+  categoryId  String
+  phone       String?
+  email       String?
+  contactName String?
+  address     String
+  ratingAvg   Decimal?
+  status      String   @default("active") // active | paused | inactive
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category     VendorCategory @relation(fields: [categoryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  eventVendors EventVendor[]
+  budgetItems  BudgetItem[]
+
+  @@map("vendors")
+}
+
+model EventVendor {
+  id            String   @id @default(uuid())
+  eventId       String   
+  vendorId      String   
+  serviceNote   String?
+  contractValue Decimal?
+  status        String   @default("active") // active | paused | inactive
+  createdAt     DateTime @default(now())
+
+  event  Event  @relation(fields: [eventId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("event_vendors")
+}
+
+// ─── Staff / Scheduling ───────────────────────────────────────────────────────
+
+model ShiftSchedule {
+  id          String   @id @default(uuid())
+  staffUserId String   
+  workDate    DateTime
+  startTime   String   
+  endTime     String   
+  eventId     String?
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  staffUser User   @relation(fields: [staffUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  event     Event? @relation(fields: [eventId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("shift_schedules")
+}
+
+model EventStaffAssignment {
+  id          String   @id @default(uuid())
+  eventId     String   
+  staffUserId String   
+  roleText    String   
+  status      String   @default("invited") // invited | confirmed | declined
+  assignedAt  DateTime @default(now())
+
+  event     Event @relation(fields: [eventId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  staffUser User  @relation(fields: [staffUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("event_staff_assignments")
+}
+
+// ─── Contracts & Finance ──────────────────────────────────────────────────────
+
+model Contract {
+  id             String   @id @default(uuid())
+  contractCode   String   @unique
+  eventId        String   
+  customerUserId String   
+  status         String   @default("draft") // draft|sent|active|liquidated|cancelled
+  currentVersion String   
+  signedAt       DateTime?
+  sentAt         DateTime?
+  totalValue     Decimal  
+  createdById    String   
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  event        Event             @relation(fields: [eventId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customerUser User              @relation("ContractCustomer", fields: [customerUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdBy    User              @relation("ContractCreator", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  versions     ContractVersion[]
+  documents    Document[]
+  transactions Transaction[]
+
+  @@map("contracts")
+}
+
+model ContractVersion {
+  id           String   @id @default(uuid())
+  contractId   String   
+  versionLabel String   
+  scopeText    String   
+  paymentTerms String   
+  generalTerms String   
+  documentUrl  String?  
+  createdById  String   
+  createdAt    DateTime @default(now())
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("contract_versions")
+}
+
+model Document {
+  id           String   @id @default(uuid())
+  eventId      String?  
+  contractId   String?  
+  uploadedById String?  
+  name         String   
+  fileType     String   
+  fileUrl      String   
+  status       String   @default("pending") // pending|approved|signed|rejected
+  createdAt    DateTime @default(now())
+
+  event      Event?    @relation(fields: [eventId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contract   Contract? @relation(fields: [contractId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  uploadedBy User?     @relation(fields: [uploadedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("documents")
+}
+
+model Transaction {
+  id              String   @id @default(uuid())
+  eventId         String?  
+  contractId      String?  
+  description     String   
+  amount          Decimal  
+  transactionDate DateTime
+  paymentMethod   String?  
+  status          String   @default("pending") // pending|completed|cancelled
+  createdAt       DateTime @default(now())
+
+  event    Event?    @relation(fields: [eventId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contract Contract? @relation(fields: [contractId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("transactions")
+}
+
+// ─── Budget ───────────────────────────────────────────────────────────────────
+
+model ProjectBudget {
+  id           String   @id @default(uuid())
+  eventId      String   
+  name         String   
+  currencyCode String   @default("VND")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  event Event        @relation(fields: [eventId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items BudgetItem[]
+
+  @@map("project_budgets")
+}
+
+model BudgetItem {
+  id              String   @id @default(uuid())
+  projectBudgetId String   
+  category        String   
+  estimatedAmount Decimal  
+  actualAmount    Decimal  @default(0)
+  status          String   @default("planned") // planned|approved|committed|paid
+  note            String?  
+  vendorId        String?  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  projectBudget ProjectBudget @relation(fields: [projectBudgetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vendor        Vendor?       @relation(fields: [vendorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("budget_items")
+}
+
+// ─── Reviews ─────────────────────────────────────────────────────────────────
+
+model Review {
+  id             String    @id @default(uuid())
+  eventId        String    
+  customerUserId String    
+  ratingOverall  Int
+  comment        String    
+  status         String    @default("pending") // pending | approved | hidden
+  submittedAt    DateTime?
+  approvedAt     DateTime?
+  approvedById   String?   
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  event        Event  @relation(fields: [eventId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customerUser User   @relation("CustomerReview", fields: [customerUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  approvedBy   User?  @relation("ReviewApprover", fields: [approvedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  scores       ReviewScore[]
+
+  @@unique([eventId, customerUserId])
+  @@map("reviews")
+}
+
+model ReviewCriteria {
+  id        String  @id @default(uuid())
+  key       String  @unique
+  label     String  
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  scores ReviewScore[]
+
+  @@map("review_criteria")
+}
+
+model ReviewScore {
+  id               String @id @default(uuid())
+  reviewId         String 
+  reviewCriteriaId String 
+  score            Int
+
+  review   Review         @relation(fields: [reviewId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  criteria ReviewCriteria @relation(fields: [reviewCriteriaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([reviewId, reviewCriteriaId])
+  @@map("review_scores")
+}
+
+// ─── Chat ─────────────────────────────────────────────────────────────────────
+
+model ChatThread {
   id        String   @id @default(uuid())
-  email     String   @unique
-  name      String?
+  eventId   String   
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+
+  event    Event              @relation(fields: [eventId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  members  ChatThreadMember[]
+  messages ChatMessage[]
+
+  @@map("chat_threads")
+}
+
+model ChatThreadMember {
+  id       String   @id @default(uuid())
+  threadId String   
+  userId   String   
+  joinedAt DateTime @default(now())
+
+  thread ChatThread @relation(fields: [threadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user   User       @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([threadId, userId])
+  @@map("chat_thread_members")
+}
+
+model ChatMessage {
+  id           String    @id @default(uuid())
+  threadId     String    
+  senderUserId String    
+  messageText  String    
+  sentAt       DateTime  @default(now())
+  deletedAt    DateTime?
+
+  thread ChatThread @relation(fields: [threadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sender User       @relation(fields: [senderUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("chat_messages")
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+model Notification {
+  id         String   @id @default(uuid())
+  userId     String   
+  scope      String   
+  type       String   
+  title      String?  
+  message    String   
+  entityType String?  
+  entityId   String?  
+  isRead     Boolean  @default(false)
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("notifications")
 }

@@ -1,0 +1,46 @@
+import { Request, Response, Router } from "express";
+import { authenticate } from "../../middleware/auth";
+import { upload, uploadToCloudinary } from "../../lib/cloudinary";
+import { sendSuccess } from "../../utils/response";
+import { createError } from "../../middleware/errorHandler";
+
+export const uploadRouter = Router();
+uploadRouter.use(authenticate);
+
+/**
+ * POST /api/upload/image
+ * Body: multipart/form-data { file: File, folder?: string }
+ * Returns: { url: string }
+ */
+uploadRouter.post(
+  "/image",
+  upload.single("file"),
+  async (req: Request, res: Response) => {
+    if (!req.file) {
+      throw createError("VALIDATION_ERROR", "No file uploaded", 400);
+    }
+
+    const folder = `nichan/${String(req.body.folder ?? "general").replace(/[^a-zA-Z0-9-_/]/g, "")}`;
+    const url = await uploadToCloudinary(req.file.buffer, folder);
+
+    sendSuccess(res, { data: { url }, status: 201 });
+  },
+);
+
+/**
+ * POST /api/upload/avatar
+ * Body: multipart/form-data { file: File }
+ * Uploads to nichan/avatars
+ */
+uploadRouter.post(
+  "/avatar",
+  upload.single("file"),
+  async (req: Request, res: Response) => {
+    if (!req.file) {
+      throw createError("VALIDATION_ERROR", "No file uploaded", 400);
+    }
+
+    const url = await uploadToCloudinary(req.file.buffer, "nichan/avatars");
+    sendSuccess(res, { data: { url }, status: 201 });
+  },
+);

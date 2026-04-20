@@ -1,0 +1,249 @@
+import { prisma } from "../../lib/prisma";
+import { createError } from "../../middleware/errorHandler";
+import { emitNewMessage } from "../../lib/socket";
+import { z } from "zod";
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+
+export const getCustomerDashboard = async (customerUserId: string) => {
+  const [events, contracts, transactions] = await prisma.$transaction([
+    prisma.event.findMany({
+      where: { customerUserId },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        status: true,
+        eventDate: true,
+        progressPercent: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    }),
+    prisma.contract.findMany({
+      where: { customerUserId },
+      select: { id: true, contractCode: true, status: true, totalValue: true, sentAt: true },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    }),
+    prisma.transaction.findMany({
+      where: { event: { customerUserId } },
+      select: { id: true, description: true, amount: true, transactionDate: true, status: true },
+      orderBy: { transactionDate: "desc" },
+      take: 5,
+    }),
+  ]);
+
+  const recentActivities = await prisma.eventActivity.findMany({
+    where: { event: { customerUserId } },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: { id: true, message: true, iconName: true, createdAt: true },
+  });
+
+  return { events, recentActivities, contracts, transactions };
+};
+
+// ─── Events ───────────────────────────────────────────────────────────────────
+
+export const getCustomerEvents = async (
+  customerUserId: string,
+  filters: { status?: string; upcomingOnly?: string },
+) => {
+  const now = new Date();
+  return prisma.event.findMany({
+    where: {
+      customerUserId,
+      ...(filters.status ? { status: filters.status } : {}),
+      ...(filters.upcomingOnly === "true"
+        ? { eventDate: { gte: now }, status: { not: "cancelled" } }
+        : {}),
+    },
+    include: {
+      organizerUser: { select: { id: true, displayName: true, avatarUrl: true } },
+      _count: { select: { tasks: true, milestones: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+};
+
+export const getCustomerEventById = async (eventId: string, customerUserId: string) => {
+  const event = await prisma.event.findFirst({
+    where: { id: eventId },
+    include: {
+      organizerUser: { select: { id: true, displayName: true, avatarUrl: true, phone: true } },
+      milestones: { orderBy: { sortOrder: "asc" } },
+      _count: { select: { tasks: true } },
+    },
+  });
+  if (!event) throw createError("NOT_FOUND", "Event not found", 404);
+  if (event.customerUserId !== customerUserId)
+    throw createError("FORBIDDEN", "You do not have access to this event", 403);
+  return event;
+};
+
+export const getEventMilestones = async (eventId: string, customerUserId: string) => {
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, customerUserId },
+    select: { id: true },
+  });
+  if (!event) throw createError("NOT_FOUND", "Event not found or access denied", 404);
+
+  return prisma.eventMilestone.findMany({
+    where: { eventId },
+    orderBy: { sortOrder: "asc" },
+  });
+};
+
+// ─── Chat ─────────────────────────────────────────────────────────────────────
+
+const ensureEventAccess = async (eventId: string, userId: string) => {
+  const event = await prisma.event.findFirst({
+    where: {
+      id: eventId,
+      OR: [{ customerUserId: userId }, { organizerUserId: userId }],
+    },
+    select: { id: true },
+  });
+  if (!event) throw createError("FORBIDDEN", "Access denied to this event", 403);
+  return event;
+};
+
+const ensureThread = async (eventId: string) => {
+  let thread = await prisma.chatThread.findFirst({ where: { eventId } });
+  if (!thread) {
+    thread = await prisma.chatThread.create({ data: { eventId } });
+  }
+  return thread;
+};
+
+export const getChatMessages = async (
+  eventId: string,
+  userId: string,
+  cursor?: string,
+  limit = 30,
+) => {
+  await ensureEventAccess(eventId, userId);
+  const thread = await ensureThread(eventId);
+
+  const messages = await prisma.chatMessage.findMany({
+    where: {
+      threadId: thread.id,
+      deletedAt: null,
+      ...(cursor ? { sentAt: { lt: new Date(cursor) } } : {}),
+    },
+    orderBy: { sentAt: "desc" },
+    take: limit,
+    include: { sender: { select: { id: true, displayName: true, avatarUrl: true } } },
+  });
+
+  return messages.reverse();
+};
+
+const sendMessageBodySchema = z.object({
+  message: z.string().min(1).max(2000),
+});
+
+export const sendChatMessage = async (eventId: string, userId: string, body: unknown) => {
+  await ensureEventAccess(eventId, userId);
+
+  const { message } = sendMessageBodySchema.parse(body);
+  const thread = await ensureThread(eventId);
+
+  await prisma.chatThreadMember.upsert({
+    where: { threadId_userId: { threadId: thread.id, userId } },
+    create: { threadId: thread.id, userId },
+    update: {},
+  });
+
+  const sender = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, displayName: true, avatarUrl: true },
+  });
+
+  const chatMessage = await prisma.chatMessage.create({
+    data: { threadId: thread.id, senderUserId: userId, messageText: message },
+    include: { sender: { select: { id: true, displayName: true, avatarUrl: true } } },
+  });
+
+  emitNewMessage(thread.id, {
+    id: chatMessage.id,
+    threadId: thread.id,
+    senderUserId: userId,
+    senderName: sender?.displayName ?? "",
+    messageText: message,
+    sentAt: chatMessage.sentAt,
+  });
+
+  return chatMessage;
+};
+
+// ─── Reviews ─────────────────────────────────────────────────────────────────
+
+const reviewBodySchema = z.object({
+  eventId: z.string().uuid(),
+  ratingOverall: z.number().int().min(1).max(5),
+  comment: z.string().min(1).max(2000),
+  criteriaScores: z
+    .array(z.object({ key: z.string(), score: z.number().int().min(1).max(5) }))
+    .optional(),
+});
+
+export const submitReview = async (customerUserId: string, body: unknown) => {
+  const input = reviewBodySchema.parse(body);
+
+  const event = await prisma.event.findFirst({
+    where: { id: input.eventId, customerUserId, status: "completed" },
+  });
+  if (!event) throw createError("NOT_FOUND", "Completed event not found", 404);
+
+  const existing = await prisma.review.findUnique({
+    where: { eventId_customerUserId: { eventId: input.eventId, customerUserId } },
+  });
+  if (existing) throw createError("CONFLICT", "Review already submitted for this event", 409);
+
+  const criteriaKeys = input.criteriaScores?.map((s) => s.key) ?? [];
+  const criteriaRecords =
+    criteriaKeys.length > 0
+      ? await prisma.reviewCriteria.findMany({ where: { key: { in: criteriaKeys } } })
+      : [];
+
+  return prisma.review.create({
+    data: {
+      eventId: input.eventId,
+      customerUserId,
+      ratingOverall: input.ratingOverall,
+      comment: input.comment,
+      status: "pending",
+      submittedAt: new Date(),
+      scores: {
+        create: criteriaRecords.map((c) => ({
+          reviewCriteriaId: c.id,
+          score: input.criteriaScores?.find((s) => s.key === c.key)?.score ?? 0,
+        })),
+      },
+    },
+    include: { scores: { include: { criteria: true } } },
+  });
+};
+
+// ─── Contracts & Transactions ─────────────────────────────────────────────────
+
+export const getCustomerContracts = async (customerUserId: string) => {
+  return prisma.contract.findMany({
+    where: { customerUserId },
+    include: {
+      event: { select: { id: true, name: true } },
+      versions: { take: 1, orderBy: { createdAt: "desc" } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+};
+
+export const getCustomerTransactions = async (customerUserId: string) => {
+  return prisma.transaction.findMany({
+    where: { event: { customerUserId } },
+    include: { event: { select: { id: true, name: true } } },
+    orderBy: { transactionDate: "desc" },
+  });
+};

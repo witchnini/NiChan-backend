@@ -4,6 +4,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 
 import { env } from "./config/env";
+import { errorHandler } from "./middleware/errorHandler";
 import { apiRouter } from "./routes";
 
 export const createApp = () => {
@@ -21,17 +22,23 @@ export const createApp = () => {
 
   app.get("/", (_req, res) => {
     res.status(200).json({
-      message: "NiChan backend is running",
+      success: true,
+      data: { message: "NiChan backend is running" },
     });
   });
 
   app.use("/api", apiRouter);
 
+  // 404
   app.use((_req, res) => {
     res.status(404).json({
-      message: "Route not found",
+      success: false,
+      error: { code: "NOT_FOUND", message: "Route not found" },
     });
   });
+
+  // Global error handler — MUST be last
+  app.use(errorHandler);
 
   return app;
 };
