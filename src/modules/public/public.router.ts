@@ -5,6 +5,7 @@ import {
   getBlogPostById,
   getBlogPosts,
   getPortfolio,
+  getReviewCriteria,
   getServiceBySlug,
   getServiceCategories,
   getServices,
@@ -68,5 +69,11 @@ publicRouter.get("/blog-posts/:id", async (req: Request, res: Response) => {
 // GET /api/public/testimonials
 publicRouter.get("/testimonials", async (_req: Request, res: Response) => {
   const data = await getTestimonials();
+  sendSuccess(res, { data });
+});
+
+// GET /api/public/review-criteria
+publicRouter.get("/review-criteria", async (_req: Request, res: Response) => {
+  const data = await getReviewCriteria();
   sendSuccess(res, { data });
 });

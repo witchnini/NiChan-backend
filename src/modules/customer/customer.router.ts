@@ -6,8 +6,10 @@ import {
   getChatMessages,
   getCustomerContracts,
   getCustomerDashboard,
+  getCustomerDocuments,
   getCustomerEventById,
   getCustomerEvents,
+  getCustomerReviews,
   getCustomerTransactions,
   getEventMilestones,
   sendChatMessage,
@@ -77,4 +79,16 @@ customerRouter.get("/transactions", async (req: Request, res: Response) => {
 customerRouter.post("/reviews", async (req: Request, res: Response) => {
   const data = await submitReview(req.user!.userId, req.body);
   sendSuccess(res, { data, status: 201 });
+});
+
+// GET /api/customer/reviews
+customerRouter.get("/reviews", async (req: Request, res: Response) => {
+  const data = await getCustomerReviews(req.user!.userId);
+  sendSuccess(res, { data });
+});
+
+// GET /api/customer/documents
+customerRouter.get("/documents", async (req: Request, res: Response) => {
+  const data = await getCustomerDocuments(req.user!.userId);
+  sendSuccess(res, { data });
 });

@@ -135,3 +135,13 @@ export const getTestimonials = async () => {
     orderBy: [{ isFeatured: "desc" }, { id: "asc" }],
   });
 };
+
+// ─── Review Criteria ──────────────────────────────────────────────────────────
+
+export const getReviewCriteria = async () => {
+  return prisma.reviewCriteria.findMany({
+    where: { isActive: true },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, key: true, label: true, sortOrder: true },
+  });
+};

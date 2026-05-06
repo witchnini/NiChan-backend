@@ -247,3 +247,26 @@ export const getCustomerTransactions = async (customerUserId: string) => {
     orderBy: { transactionDate: "desc" },
   });
 };
+
+// ─── Reviews (customer view) ───────────────────────────────────────────────────────
+
+export const getCustomerReviews = async (customerUserId: string) => {
+  return prisma.review.findMany({
+    where: { customerUserId },
+    include: {
+      event: { select: { id: true, name: true } },
+      scores: { include: { criteria: { select: { key: true, label: true } } } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+};
+
+// ─── Documents (customer view) ─────────────────────────────────────────────────────
+
+export const getCustomerDocuments = async (customerUserId: string) => {
+  return prisma.document.findMany({
+    where: { event: { customerUserId } },
+    include: { event: { select: { id: true, name: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+};
