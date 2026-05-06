@@ -6,6 +6,20 @@ import type { RegisterInput, LoginInput, ConsultationInput } from "./auth.schema
 
 const SALT_ROUNDS = 12;
 
+const buildAuthUser = (user: {
+  id: string;
+  email: string;
+  role: string;
+  displayName: string;
+  avatarUrl?: string | null;
+}) => ({
+  userId: user.id,
+  email: user.email,
+  role: user.role,
+  displayName: user.displayName,
+  avatarUrl: user.avatarUrl ?? null,
+});
+
 // ─── Register ─────────────────────────────────────────────────────────────────
 
 export const register = async (input: RegisterInput) => {
@@ -30,19 +44,14 @@ export const register = async (input: RegisterInput) => {
         create: { fullName: input.name },
       },
     },
-    select: { id: true, email: true, role: true, displayName: true },
+    select: { id: true, email: true, role: true, displayName: true, avatarUrl: true },
   });
 
   const token = signToken({ userId: user.id, role: user.role });
 
   return {
     accessToken: token,
-    user: {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      displayName: user.displayName,
-    },
+    user: buildAuthUser(user),
   };
 };
 
@@ -58,6 +67,7 @@ export const login = async (input: LoginInput) => {
       role: true,
       status: true,
       displayName: true,
+      avatarUrl: true,
     },
   });
 
@@ -83,13 +93,36 @@ export const login = async (input: LoginInput) => {
 
   return {
     accessToken: token,
-    user: {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      displayName: user.displayName,
-    },
+    user: buildAuthUser(user),
   };
+};
+
+export const getCurrentUser = async (userId: string) => {
+  const user = await prisma.user.findFirst({
+    where: { id: userId, deletedAt: null },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      status: true,
+      displayName: true,
+      avatarUrl: true,
+    },
+  });
+
+  if (!user) {
+    throw createError("NOT_FOUND", "User not found", 404);
+  }
+
+  if (user.status !== "active") {
+    throw createError("FORBIDDEN", "Account is suspended or inactive", 403);
+  }
+
+  return buildAuthUser(user);
+};
+
+export const logout = async () => {
+  return { loggedOut: true };
 };
 
 // ─── Consultation Request ─────────────────────────────────────────────────────

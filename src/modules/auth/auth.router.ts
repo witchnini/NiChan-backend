@@ -1,5 +1,5 @@
 import { Request, Response, Router } from "express";
-import { optionalAuth } from "../../middleware/auth";
+import { authenticate, optionalAuth } from "../../middleware/auth";
 import { validate } from "../../middleware/validate";
 import { sendSuccess } from "../../utils/response";
 import {
@@ -9,7 +9,9 @@ import {
 } from "./auth.schema";
 import {
   createConsultationRequest,
+  getCurrentUser,
   login,
+  logout,
   register,
 } from "./auth.service";
 
@@ -34,6 +36,16 @@ authRouter.post(
     sendSuccess(res, { data });
   },
 );
+
+authRouter.get("/me", authenticate, async (req: Request, res: Response) => {
+  const data = await getCurrentUser(req.user!.userId);
+  sendSuccess(res, { data });
+});
+
+authRouter.post("/logout", authenticate, async (_req: Request, res: Response) => {
+  const data = await logout();
+  sendSuccess(res, { data });
+});
 
 // POST /api/public/consultation-requests  (mounted under publicRouter below)
 export const consultationRouter = Router();
