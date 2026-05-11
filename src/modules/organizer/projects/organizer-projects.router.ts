@@ -4,13 +4,18 @@ import { validate } from "../../../middleware/validate";
 import { buildMeta, parsePagination } from "../../../utils/pagination";
 import { p, q } from "../../../utils/request";
 import { sendSuccess } from "../../../utils/response";
-import { createTaskSchema, updateTaskStatusSchema } from "./organizer-projects.schema";
+import {
+  createTaskSchema,
+  updateProjectStatusSchema,
+  updateTaskStatusSchema,
+} from "./organizer-projects.schema";
 import {
   createTask,
   deleteTask,
   getKanban,
   getTask,
   listOrganizerProjects,
+  updateProjectStatus,
   updateTask,
   updateTaskStatus,
 } from "./organizer-projects.service";
@@ -29,6 +34,16 @@ organizerProjectsRouter.get("/:projectId/kanban", async (req: Request, res: Resp
   const data = await getKanban(p(req, "projectId"), req.user!.userId);
   sendSuccess(res, { data });
 });
+
+// PATCH /api/organizer/projects/:projectId/status
+organizerProjectsRouter.patch(
+  "/:projectId/status",
+  validate(updateProjectStatusSchema),
+  async (req: Request, res: Response) => {
+    const data = await updateProjectStatus(p(req, "projectId"), req.user!.userId, req.body);
+    sendSuccess(res, { data });
+  },
+);
 
 // POST /api/organizer/tasks
 organizerProjectsRouter.post(

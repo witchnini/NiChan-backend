@@ -1,7 +1,16 @@
 import { prisma } from "../../../lib/prisma";
 import { createError } from "../../../middleware/errorHandler";
+import {
+  activateCustomerTracking,
+  emitCustomerNotification,
+  ensureCustomerTrackingInTransaction,
+} from "../../shared/event-lifecycle.service";
 import { TASK_STATUS_TRANSITIONS, TaskStatus } from "../../../types/enums";
-import type { CreateTaskInput, UpdateTaskStatusInput } from "./organizer-projects.schema";
+import type {
+  CreateTaskInput,
+  UpdateProjectStatusInput,
+  UpdateTaskStatusInput,
+} from "./organizer-projects.schema";
 
 // ─── Projects List ────────────────────────────────────────────────────────────
 
@@ -54,6 +63,55 @@ export const getKanban = async (projectId: string, organizerUserId: string) => {
   }));
 
   return { project: event, columns };
+};
+
+export const updateProjectStatus = async (
+  projectId: string,
+  organizerUserId: string,
+  input: UpdateProjectStatusInput,
+) => {
+  const event = await prisma.event.findFirst({
+    where: { id: projectId, organizerUserId },
+    select: { id: true, name: true, status: true },
+  });
+  if (!event) throw createError("NOT_FOUND", "Project not found", 404);
+  if (event.status === input.status) return event;
+
+  const allowed: Record<string, UpdateProjectStatusInput["status"][]> = {
+    planning: ["in_progress"],
+    quoted: ["in_progress"],
+    contracted: ["in_progress"],
+    in_progress: ["completed"],
+  };
+  if (!(allowed[event.status] ?? []).includes(input.status)) {
+    throw createError(
+      "INVALID_STATUS_TRANSITION",
+      `Cannot transition project from '${event.status}' to '${input.status}'`,
+      422,
+    );
+  }
+
+  if (input.status === "in_progress") {
+    return activateCustomerTracking(projectId, {
+      actorUserId: organizerUserId,
+      status: "in_progress",
+      activityMessage: `Ban to chuc da bat dau trien khai su kien ${event.name}.`,
+      notificationTitle: "Su kien da bat dau trien khai",
+      notificationMessage: `Ban to chuc da bat dau trien khai su kien ${event.name}. Hay theo doi timeline va trao doi tren dashboard.`,
+    });
+  }
+
+  const result = await prisma.$transaction((tx) =>
+    ensureCustomerTrackingInTransaction(tx, projectId, {
+      actorUserId: organizerUserId,
+      status: "completed",
+      activityMessage: `Su kien ${event.name} da duoc danh dau hoan thanh.`,
+      notificationTitle: "Su kien da hoan thanh",
+      notificationMessage: `Su kien ${event.name} da hoan thanh. Ban co the xem lai tai lieu, thanh toan va gui danh gia.`,
+    }),
+  );
+  emitCustomerNotification(result.notification);
+  return result.event;
 };
 
 // ─── Tasks CRUD ───────────────────────────────────────────────────────────────

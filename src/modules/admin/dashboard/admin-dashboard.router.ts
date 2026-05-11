@@ -21,7 +21,7 @@ adminDashboardRouter.get("/dashboard", async (_req: Request, res: Response) => {
 // GET /api/admin/notifications
 adminDashboardRouter.get("/notifications", async (req: Request, res: Response) => {
   const pg = parsePagination(req, "createdAt");
-  const { items, total } = await getAdminNotifications({
+  const { items, total } = await getAdminNotifications(req.user!.userId, {
     read: q(req, "read"),
     type: q(req, "type"),
     skip: pg.skip,
@@ -32,6 +32,6 @@ adminDashboardRouter.get("/notifications", async (req: Request, res: Response) =
 
 // PATCH /api/admin/notifications/:id/read
 adminDashboardRouter.patch("/notifications/:id/read", async (req: Request, res: Response) => {
-  const data = await markAdminNotificationRead(p(req, "id"));
+  const data = await markAdminNotificationRead(p(req, "id"), req.user!.userId);
   sendSuccess(res, { data });
 });

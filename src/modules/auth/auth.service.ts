@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "../../lib/prisma";
 import { signToken } from "../../lib/jwt";
+import { emitNotification } from "../../lib/socket";
 import { createError } from "../../middleware/errorHandler";
 import type { RegisterInput, LoginInput, ConsultationInput } from "./auth.schema";
 
@@ -127,6 +128,44 @@ export const logout = async () => {
 
 // ─── Consultation Request ─────────────────────────────────────────────────────
 
+const notifyAdminsOfConsultationRequest = async (request: {
+  id: string;
+  requestCode: string;
+  customerName: string;
+  eventType: string;
+}) => {
+  const admins = await prisma.user.findMany({
+    where: { role: "admin", status: "active", deletedAt: null },
+    select: { id: true },
+  });
+
+  await Promise.all(
+    admins.map(async (admin) => {
+      const notification = await prisma.notification.create({
+        data: {
+          userId: admin.id,
+          scope: "admin",
+          type: "request",
+          title: "Yeu cau bao gia moi",
+          message: `${request.customerName} vua gui yeu cau ${request.requestCode} cho ${request.eventType}`,
+          entityType: "consultation_request",
+          entityId: request.id,
+        },
+      });
+
+      emitNotification(admin.id, {
+        id: notification.id,
+        type: notification.type,
+        title: notification.title ?? null,
+        message: notification.message,
+        entityType: notification.entityType ?? null,
+        entityId: notification.entityId ?? null,
+        createdAt: notification.createdAt,
+      });
+    }),
+  );
+};
+
 export const createConsultationRequest = async (
   input: ConsultationInput,
   customerUserId?: string,
@@ -153,7 +192,11 @@ export const createConsultationRequest = async (
       status: "new",
       customerUserId: customerUserId ?? null,
     },
-    select: { id: true, requestCode: true, status: true },
+    select: { id: true, requestCode: true, status: true, customerName: true, eventType: true },
+  });
+
+  await notifyAdminsOfConsultationRequest(request).catch((error) => {
+    console.warn("[CONSULTATION_NOTIFICATION_FAILED]", error);
   });
 
   return {

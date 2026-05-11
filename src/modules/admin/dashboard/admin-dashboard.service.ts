@@ -1,4 +1,5 @@
 import { prisma } from "../../../lib/prisma";
+import { createError } from "../../../middleware/errorHandler";
 
 export const getAdminDashboard = async () => {
   const now = new Date();
@@ -75,9 +76,11 @@ export const getAdminDashboard = async () => {
 };
 
 export const getAdminNotifications = async (
+  adminUserId: string,
   filters: { read?: string; type?: string; skip: number; take: number },
 ) => {
   const where = {
+    userId: adminUserId,
     scope: "admin",
     ...(filters.read !== undefined ? { isRead: filters.read === "true" } : {}),
     ...(filters.type ? { type: filters.type } : {}),
@@ -94,9 +97,11 @@ export const getAdminNotifications = async (
   return { items, total };
 };
 
-export const markAdminNotificationRead = async (id: string) => {
-  return prisma.notification.update({
-    where: { id },
+export const markAdminNotificationRead = async (id: string, adminUserId: string) => {
+  const result = await prisma.notification.updateMany({
+    where: { id, userId: adminUserId, scope: "admin" },
     data: { isRead: true, readAt: new Date() },
   });
+  if (result.count === 0) throw createError("NOT_FOUND", "Notification not found", 404);
+  return { updated: true };
 };
