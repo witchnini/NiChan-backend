@@ -6,6 +6,7 @@ import { createError } from "../../middleware/errorHandler";
 import type { RegisterInput, LoginInput, ConsultationInput } from "./auth.schema";
 
 const SALT_ROUNDS = 12;
+const PORTAL_ROLES = new Set(["admin", "organizer", "customer"]);
 
 const buildAuthUser = (user: {
   id: string;
@@ -85,6 +86,10 @@ export const login = async (input: LoginInput) => {
     throw createError("UNAUTHENTICATED", "Invalid email or password", 401);
   }
 
+  if (!PORTAL_ROLES.has(user.role)) {
+    throw createError("FORBIDDEN", "This account is not allowed to sign in", 403);
+  }
+
   // Update last login (fire-and-forget)
   prisma.user
     .update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
@@ -117,6 +122,10 @@ export const getCurrentUser = async (userId: string) => {
 
   if (user.status !== "active") {
     throw createError("FORBIDDEN", "Account is suspended or inactive", 403);
+  }
+
+  if (!PORTAL_ROLES.has(user.role)) {
+    throw createError("FORBIDDEN", "This account is not allowed to sign in", 403);
   }
 
   return buildAuthUser(user);

@@ -8,6 +8,12 @@ import type {
 } from "./admin-users.schema";
 
 const SALT_ROUNDS = 12;
+const PORTAL_ROLES = ["admin", "organizer", "customer"] as const;
+
+const portalRoleFilter = (role?: string) => {
+  if (!role) return { in: [...PORTAL_ROLES] };
+  return PORTAL_ROLES.includes(role as (typeof PORTAL_ROLES)[number]) ? role : { in: [] };
+};
 
 export const listUsers = async (filters: {
   role?: string;
@@ -19,7 +25,7 @@ export const listUsers = async (filters: {
 }) => {
   const where = {
     deletedAt: null,
-    ...(filters.role ? { role: filters.role } : {}),
+    role: portalRoleFilter(filters.role),
     ...(filters.status ? { status: filters.status } : {}),
     ...(filters.search
       ? {
@@ -60,7 +66,7 @@ export const listUsers = async (filters: {
 
 export const getUserById = async (id: string) => {
   const user = await prisma.user.findFirst({
-    where: { id, deletedAt: null },
+    where: { id, role: { in: [...PORTAL_ROLES] }, deletedAt: null },
     select: {
       id: true,
       email: true,
@@ -121,7 +127,7 @@ export const createUser = async (input: CreateUserInput) => {
 };
 
 export const updateUser = async (id: string, input: UpdateUserInput) => {
-  const existing = await prisma.user.findFirst({ where: { id, deletedAt: null } });
+  const existing = await prisma.user.findFirst({ where: { id, role: { in: [...PORTAL_ROLES] }, deletedAt: null } });
   if (!existing) throw createError("NOT_FOUND", "User not found", 404);
 
   return prisma.user.update({
@@ -136,7 +142,7 @@ export const updateUser = async (id: string, input: UpdateUserInput) => {
 };
 
 export const updateUserStatus = async (id: string, input: UpdateUserStatusInput) => {
-  const existing = await prisma.user.findFirst({ where: { id, deletedAt: null } });
+  const existing = await prisma.user.findFirst({ where: { id, role: { in: [...PORTAL_ROLES] }, deletedAt: null } });
   if (!existing) throw createError("NOT_FOUND", "User not found", 404);
 
   return prisma.user.update({
@@ -147,7 +153,7 @@ export const updateUserStatus = async (id: string, input: UpdateUserStatusInput)
 };
 
 export const softDeleteUser = async (id: string) => {
-  const existing = await prisma.user.findFirst({ where: { id, deletedAt: null } });
+  const existing = await prisma.user.findFirst({ where: { id, role: { in: [...PORTAL_ROLES] }, deletedAt: null } });
   if (!existing) throw createError("NOT_FOUND", "User not found", 404);
 
   return prisma.user.update({

@@ -21,6 +21,7 @@ import { organizerReportsRouter } from "../modules/reports/reports.router";
 // Admin
 import { adminDashboardRouter } from "../modules/admin/dashboard/admin-dashboard.router";
 import { adminRequestsRouter } from "../modules/admin/requests/admin-requests.router";
+import { adminProjectsRouter } from "../modules/admin/projects/admin-projects.router";
 import { adminUsersRouter } from "../modules/admin/users/admin-users.router";
 import { adminContractsRouter } from "../modules/admin/contracts/admin-contracts.router";
 import { adminContentRouter } from "../modules/admin/content/admin-content.router";
@@ -61,6 +62,7 @@ apiRouter.use("/organizer", makeProfileRouter("organizer", "admin"));
 // ─── Admin ────────────────────────────────────────────────────────────────────
 apiRouter.use("/admin", adminDashboardRouter);
 apiRouter.use("/admin/requests", adminRequestsRouter);
+apiRouter.use("/admin/projects", adminProjectsRouter);
 apiRouter.use("/admin/users", adminUsersRouter);
 apiRouter.use("/admin/contracts", adminContractsRouter);
 apiRouter.use("/admin/content", adminContentRouter);

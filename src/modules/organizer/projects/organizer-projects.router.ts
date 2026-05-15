@@ -13,6 +13,7 @@ import {
   createTask,
   deleteTask,
   getKanban,
+  getOrganizerProjectById,
   getTask,
   listOrganizerProjects,
   updateProjectStatus,
@@ -24,20 +25,20 @@ export const organizerProjectsRouter = Router();
 organizerProjectsRouter.use(authenticate, requireRole("organizer", "admin"));
 
 // GET /api/organizer/projects
-organizerProjectsRouter.get("/", async (req: Request, res: Response) => {
+organizerProjectsRouter.get("/projects", async (req: Request, res: Response) => {
   const data = await listOrganizerProjects(req.user!.userId);
   sendSuccess(res, { data });
 });
 
 // GET /api/organizer/projects/:projectId/kanban
-organizerProjectsRouter.get("/:projectId/kanban", async (req: Request, res: Response) => {
+organizerProjectsRouter.get("/projects/:projectId/kanban", async (req: Request, res: Response) => {
   const data = await getKanban(p(req, "projectId"), req.user!.userId);
   sendSuccess(res, { data });
 });
 
 // PATCH /api/organizer/projects/:projectId/status
 organizerProjectsRouter.patch(
-  "/:projectId/status",
+  "/projects/:projectId/status",
   validate(updateProjectStatusSchema),
   async (req: Request, res: Response) => {
     const data = await updateProjectStatus(p(req, "projectId"), req.user!.userId, req.body);
@@ -50,20 +51,20 @@ organizerProjectsRouter.post(
   "/tasks",
   validate(createTaskSchema),
   async (req: Request, res: Response) => {
-    const data = await createTask(req.body, req.user!.userId);
+    const data = await createTask(req.body, req.user!.userId, req.user!.userId);
     sendSuccess(res, { data, status: 201 });
   },
 );
 
 // GET /api/organizer/tasks/:taskId
 organizerProjectsRouter.get("/tasks/:taskId", async (req: Request, res: Response) => {
-  const data = await getTask(p(req, "taskId"));
+  const data = await getTask(p(req, "taskId"), req.user!.userId);
   sendSuccess(res, { data });
 });
 
 // PUT /api/organizer/tasks/:taskId
 organizerProjectsRouter.put("/tasks/:taskId", async (req: Request, res: Response) => {
-  const data = await updateTask(p(req, "taskId"), req.body);
+  const data = await updateTask(p(req, "taskId"), req.body, req.user!.userId);
   sendSuccess(res, { data });
 });
 
@@ -72,13 +73,19 @@ organizerProjectsRouter.patch(
   "/tasks/:taskId/status",
   validate(updateTaskStatusSchema),
   async (req: Request, res: Response) => {
-    const data = await updateTaskStatus(p(req, "taskId"), req.body, req.user!.userId);
+    const data = await updateTaskStatus(p(req, "taskId"), req.body, req.user!.userId, req.user!.userId);
     sendSuccess(res, { data });
   },
 );
 
 // DELETE /api/organizer/tasks/:taskId
 organizerProjectsRouter.delete("/tasks/:taskId", async (req: Request, res: Response) => {
-  await deleteTask(p(req, "taskId"));
+  await deleteTask(p(req, "taskId"), req.user!.userId);
   sendSuccess(res, { data: { deleted: true } });
+});
+
+// GET /api/organizer/projects/:projectId
+organizerProjectsRouter.get("/projects/:projectId", async (req: Request, res: Response) => {
+  const data = await getOrganizerProjectById(p(req, "projectId"), req.user!.userId);
+  sendSuccess(res, { data });
 });

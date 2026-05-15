@@ -11,41 +11,55 @@ import {
   getStaffById,
   createStaff,
   updateStaff,
+  deleteStaff,
   getStaffShifts,
   createShift,
   getSchedule,
 } from "./admin-staff.service";
 
 export const adminStaffRouter = Router();
-adminStaffRouter.use(authenticate, requireRole("admin", "organizer"));
+adminStaffRouter.use(authenticate);
 
 // GET /api/admin/staff  (also used by organizer)
-adminStaffRouter.get("/", async (req: Request, res: Response) => {
-  const pg = parsePagination(req, "displayName");
-  const { items, total } = await listStaff({
-    status: q(req, "status"),
-    search: q(req, "search"),
-    skip: pg.skip,
-    take: pg.take,
-  });
-  sendSuccess(res, { data: items, meta: buildMeta(pg, total) });
-});
+adminStaffRouter.get(
+  "/",
+  requireRole("admin", "organizer"),
+  async (req: Request, res: Response) => {
+    const pg = parsePagination(req, "displayName");
+    const { items, total } = await listStaff({
+      status: q(req, "status"),
+      search: q(req, "search"),
+      skip: pg.skip,
+      take: pg.take,
+    });
+    sendSuccess(res, { data: items, meta: buildMeta(pg, total) });
+  },
+);
 
 // GET /api/admin/staff/schedule
-adminStaffRouter.get("/schedule", async (req: Request, res: Response) => {
-  const data = await getSchedule(q(req, "startDate"), q(req, "endDate"));
-  sendSuccess(res, { data });
-});
+adminStaffRouter.get(
+  "/schedule",
+  requireRole("admin", "organizer"),
+  async (req: Request, res: Response) => {
+    const data = await getSchedule(q(req, "startDate"), q(req, "endDate"));
+    sendSuccess(res, { data });
+  },
+);
 
 // GET /api/admin/staff/:id
-adminStaffRouter.get("/:id", async (req: Request, res: Response) => {
-  const data = await getStaffById(p(req, "id"));
-  sendSuccess(res, { data });
-});
+adminStaffRouter.get(
+  "/:id",
+  requireRole("admin", "organizer"),
+  async (req: Request, res: Response) => {
+    const data = await getStaffById(p(req, "id"));
+    sendSuccess(res, { data });
+  },
+);
 
 // POST /api/admin/staff
 adminStaffRouter.post(
   "/",
+  requireRole("admin"),
   validate(staffSchema),
   async (req: Request, res: Response) => {
     const data = await createStaff(req.body);
@@ -56,6 +70,7 @@ adminStaffRouter.post(
 // PUT /api/admin/staff/:id
 adminStaffRouter.put(
   "/:id",
+  requireRole("admin"),
   validate(staffSchema.partial()),
   async (req: Request, res: Response) => {
     const data = await updateStaff(p(req, "id"), req.body);
@@ -63,15 +78,30 @@ adminStaffRouter.put(
   },
 );
 
+// DELETE /api/admin/staff/:id
+adminStaffRouter.delete(
+  "/:id",
+  requireRole("admin"),
+  async (req: Request, res: Response) => {
+    const data = await deleteStaff(p(req, "id"));
+    sendSuccess(res, { data });
+  },
+);
+
 // GET /api/admin/staff/:id/shifts
-adminStaffRouter.get("/:id/shifts", async (req: Request, res: Response) => {
-  const data = await getStaffShifts(p(req, "id"));
-  sendSuccess(res, { data });
-});
+adminStaffRouter.get(
+  "/:id/shifts",
+  requireRole("admin", "organizer"),
+  async (req: Request, res: Response) => {
+    const data = await getStaffShifts(p(req, "id"));
+    sendSuccess(res, { data });
+  },
+);
 
 // POST /api/admin/staff/:id/shifts
 adminStaffRouter.post(
   "/:id/shifts",
+  requireRole("admin"),
   validate(shiftSchema),
   async (req: Request, res: Response) => {
     const data = await createShift(p(req, "id"), req.body);

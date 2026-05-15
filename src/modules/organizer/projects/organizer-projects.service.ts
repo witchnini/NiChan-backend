@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 import { createError } from "../../../middleware/errorHandler";
 import {
@@ -25,11 +26,28 @@ export const listOrganizerProjects = async (organizerUserId: string) => {
       eventDate: true,
       guestCount: true,
       progressPercent: true,
-      customerUser: { select: { id: true, displayName: true, avatarUrl: true } },
-      _count: { select: { tasks: true } },
+      locationText: true,
+      customerUser: { select: { id: true, displayName: true, avatarUrl: true, email: true, phone: true } },
+      _count: { select: { tasks: true, milestones: true, vendors: true, staffAssignments: true } },
     },
     orderBy: { createdAt: "desc" },
   });
+};
+
+export const getOrganizerProjectById = async (projectId: string, organizerUserId: string) => {
+  const project = await prisma.event.findFirst({
+    where: { id: projectId, organizerUserId },
+    include: {
+      customerUser: { select: { id: true, displayName: true, avatarUrl: true, email: true, phone: true } },
+      organizerUser: { select: { id: true, displayName: true, avatarUrl: true, email: true, phone: true } },
+      consultationRequest: { select: { id: true, requestCode: true, status: true, budgetRange: true } },
+      milestones: { orderBy: { sortOrder: "asc" } },
+      activities: { orderBy: { createdAt: "desc" }, take: 12 },
+      _count: { select: { tasks: true, vendors: true, staffAssignments: true, contracts: true, documents: true } },
+    },
+  });
+  if (!project) throw createError("NOT_FOUND", "Project not found", 404);
+  return project;
 };
 
 // ─── Kanban ───────────────────────────────────────────────────────────────────
@@ -41,10 +59,33 @@ const KANBAN_COLUMNS = [
   { id: "done", title: "Hoàn thành" },
 ] as const;
 
+export const recalculateProjectProgress = async (
+  tx: Prisma.TransactionClient,
+  eventId: string,
+) => {
+  const total = await tx.projectTask.count({ where: { eventId } });
+  const done = total > 0 ? await tx.projectTask.count({ where: { eventId, status: "done" } }) : 0;
+  const progressPercent = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  return tx.event.update({
+    where: { id: eventId },
+    data: { progressPercent },
+    select: { id: true, progressPercent: true },
+  });
+};
+
 export const getKanban = async (projectId: string, organizerUserId: string) => {
   const event = await prisma.event.findFirst({
     where: { id: projectId, organizerUserId },
-    select: { id: true, name: true, status: true, progressPercent: true },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      eventDate: true,
+      guestCount: true,
+      progressPercent: true,
+      customerUser: { select: { id: true, displayName: true, avatarUrl: true } },
+    },
   });
   if (!event) throw createError("NOT_FOUND", "Project not found", 404);
 
@@ -116,32 +157,58 @@ export const updateProjectStatus = async (
 
 // ─── Tasks CRUD ───────────────────────────────────────────────────────────────
 
-export const createTask = async (input: CreateTaskInput, createdById: string) => {
-  const event = await prisma.event.findUnique({
-    where: { id: input.eventId },
+export const createTask = async (
+  input: CreateTaskInput,
+  createdById: string,
+  organizerUserId?: string,
+) => {
+  const event = await prisma.event.findFirst({
+    where: {
+      id: input.eventId,
+      ...(organizerUserId ? { organizerUserId } : {}),
+    },
     select: { id: true },
   });
   if (!event) throw createError("NOT_FOUND", "Event not found", 404);
 
-  return prisma.projectTask.create({
-    data: {
-      eventId: input.eventId,
-      title: input.title,
-      description: input.description ?? null,
-      status: input.status,
-      priority: input.priority,
-      assigneeUserId: input.assigneeUserId ?? null,
-      dueAt: input.dueAt ? new Date(input.dueAt) : null,
-      sortOrder: input.sortOrder,
-      createdById,
-    },
-    include: {
-      assignee: { select: { id: true, displayName: true, avatarUrl: true } },
-    },
+  return prisma.$transaction(async (tx) => {
+    const task = await tx.projectTask.create({
+      data: {
+        eventId: input.eventId,
+        title: input.title,
+        description: input.description ?? null,
+        status: input.status,
+        priority: input.priority,
+        assigneeUserId: input.assigneeUserId ?? null,
+        dueAt: input.dueAt ? new Date(input.dueAt) : null,
+        sortOrder: input.sortOrder,
+        createdById,
+        ...(input.status === "done" ? { completedAt: new Date() } : {}),
+      },
+      include: {
+        assignee: { select: { id: true, displayName: true, avatarUrl: true } },
+      },
+    });
+
+    await recalculateProjectProgress(tx, input.eventId);
+    return task;
   });
 };
 
-export const getTask = async (taskId: string) => {
+const getTaskForOrganizer = async (taskId: string, organizerUserId?: string) => {
+  return prisma.projectTask.findFirst({
+    where: {
+      id: taskId,
+      ...(organizerUserId ? { event: { organizerUserId } } : {}),
+    },
+    select: { id: true, eventId: true, status: true },
+  });
+};
+
+export const getTask = async (taskId: string, organizerUserId?: string) => {
+  const existing = await getTaskForOrganizer(taskId, organizerUserId);
+  if (!existing) throw createError("NOT_FOUND", "Task not found", 404);
+
   const task = await prisma.projectTask.findUnique({
     where: { id: taskId },
     include: {
@@ -154,8 +221,12 @@ export const getTask = async (taskId: string) => {
   return task;
 };
 
-export const updateTask = async (taskId: string, data: Partial<CreateTaskInput>) => {
-  const existing = await prisma.projectTask.findUnique({ where: { id: taskId } });
+export const updateTask = async (
+  taskId: string,
+  data: Partial<CreateTaskInput>,
+  organizerUserId?: string,
+) => {
+  const existing = await getTaskForOrganizer(taskId, organizerUserId);
   if (!existing) throw createError("NOT_FOUND", "Task not found", 404);
 
   return prisma.projectTask.update({
@@ -176,11 +247,9 @@ export const updateTaskStatus = async (
   taskId: string,
   input: UpdateTaskStatusInput,
   changedById: string,
+  organizerUserId?: string,
 ) => {
-  const task = await prisma.projectTask.findUnique({
-    where: { id: taskId },
-    select: { status: true },
-  });
+  const task = await getTaskForOrganizer(taskId, organizerUserId);
   if (!task) throw createError("NOT_FOUND", "Task not found", 404);
 
   const currentStatus = task.status as TaskStatus;
@@ -193,30 +262,35 @@ export const updateTaskStatus = async (
     );
   }
 
-  const [updated] = await prisma.$transaction([
-    prisma.projectTask.update({
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.projectTask.update({
       where: { id: taskId },
       data: {
         status: input.status,
-        ...(input.status === "done" ? { completedAt: new Date() } : {}),
+        completedAt: input.status === "done" ? new Date() : null,
       },
-    }),
-    prisma.taskStatusHistory.create({
+    });
+
+    await tx.taskStatusHistory.create({
       data: {
         taskId,
         fromStatus: currentStatus,
         toStatus: input.status,
         changedById,
       },
-    }),
-  ]);
+    });
 
-  return updated;
+    await recalculateProjectProgress(tx, task.eventId);
+    return updated;
+  });
 };
 
-export const deleteTask = async (taskId: string) => {
-  const existing = await prisma.projectTask.findUnique({ where: { id: taskId } });
+export const deleteTask = async (taskId: string, organizerUserId?: string) => {
+  const existing = await getTaskForOrganizer(taskId, organizerUserId);
   if (!existing) throw createError("NOT_FOUND", "Task not found", 404);
-  await prisma.taskStatusHistory.deleteMany({ where: { taskId } });
-  await prisma.projectTask.delete({ where: { id: taskId } });
+  await prisma.$transaction(async (tx) => {
+    await tx.taskStatusHistory.deleteMany({ where: { taskId } });
+    await tx.projectTask.delete({ where: { id: taskId } });
+    await recalculateProjectProgress(tx, existing.eventId);
+  });
 };

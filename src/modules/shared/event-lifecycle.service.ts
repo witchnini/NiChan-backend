@@ -75,13 +75,21 @@ export const ensureCustomerTrackingInTransaction = async (
       customerUserId: true,
       organizerUserId: true,
       eventDate: true,
+      progressPercent: true,
     },
   });
   if (!event) throw createError("NOT_FOUND", "Event not found", 404);
 
+  const progressPatch =
+    options.status === "completed"
+      ? { progressPercent: 100, completedAt: new Date() }
+      : options.status === "in_progress"
+        ? { progressPercent: Math.max(event.progressPercent, 25), completedAt: null }
+        : { progressPercent: Math.max(event.progressPercent, 10), completedAt: null };
+
   const updatedEvent = await tx.event.update({
     where: { id: eventId },
-    data: { status: options.status },
+    data: { status: options.status, ...progressPatch },
     select: {
       id: true,
       name: true,
