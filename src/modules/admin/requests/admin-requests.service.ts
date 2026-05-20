@@ -12,6 +12,24 @@ import type { AssignManagerInput, UpdateRequestStatusInput } from "./admin-reque
 
 const SALT_ROUNDS = 12;
 
+const parseEventNameFromNote = (note?: string | null) => {
+  if (!note) return null;
+
+  const eventNameLine = note
+    .split(/\r?\n/)
+    .find((line) => line.trim().toLowerCase().startsWith("ten su kien:"));
+
+  if (!eventNameLine) return null;
+
+  const eventName = eventNameLine.split(":").slice(1).join(":").trim();
+  return eventName || null;
+};
+
+const buildEventName = (request: {
+  eventType: string;
+  note?: string | null;
+}) => parseEventNameFromNote(request.note) ?? request.eventType;
+
 export const listRequests = async (filters: {
   status?: string;
   search?: string;
@@ -144,7 +162,7 @@ export const assignManager = async (requestId: string, input: AssignManagerInput
       },
     });
 
-    const eventName = `${request.eventType} - ${request.customerName}`;
+    const eventName = buildEventName(request);
     const eventData = {
       name: eventName,
       type: request.eventType,

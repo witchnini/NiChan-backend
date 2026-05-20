@@ -28,6 +28,17 @@ export const listOrganizerProjects = async (organizerUserId: string) => {
       progressPercent: true,
       locationText: true,
       customerUser: { select: { id: true, displayName: true, avatarUrl: true, email: true, phone: true } },
+      consultationRequest: {
+        select: {
+          id: true,
+          requestCode: true,
+          status: true,
+          customerName: true,
+          eventType: true,
+          note: true,
+          budgetRange: true,
+        },
+      },
       _count: { select: { tasks: true, milestones: true, vendors: true, staffAssignments: true } },
     },
     orderBy: { createdAt: "desc" },
@@ -40,7 +51,17 @@ export const getOrganizerProjectById = async (projectId: string, organizerUserId
     include: {
       customerUser: { select: { id: true, displayName: true, avatarUrl: true, email: true, phone: true } },
       organizerUser: { select: { id: true, displayName: true, avatarUrl: true, email: true, phone: true } },
-      consultationRequest: { select: { id: true, requestCode: true, status: true, budgetRange: true } },
+      consultationRequest: {
+        select: {
+          id: true,
+          requestCode: true,
+          status: true,
+          customerName: true,
+          eventType: true,
+          note: true,
+          budgetRange: true,
+        },
+      },
       milestones: { orderBy: { sortOrder: "asc" } },
       activities: { orderBy: { createdAt: "desc" }, take: 12 },
       _count: { select: { tasks: true, vendors: true, staffAssignments: true, contracts: true, documents: true } },
@@ -85,6 +106,16 @@ export const getKanban = async (projectId: string, organizerUserId: string) => {
       guestCount: true,
       progressPercent: true,
       customerUser: { select: { id: true, displayName: true, avatarUrl: true } },
+      consultationRequest: {
+        select: {
+          id: true,
+          requestCode: true,
+          status: true,
+          customerName: true,
+          eventType: true,
+          note: true,
+        },
+      },
     },
   });
   if (!event) throw createError("NOT_FOUND", "Project not found", 404);

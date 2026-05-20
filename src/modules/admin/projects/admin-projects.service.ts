@@ -7,6 +7,7 @@ import {
   ensureCustomerTrackingInTransaction,
 } from "../../shared/event-lifecycle.service";
 import type {
+  AdminProjectNameInput,
   AdminProjectOrganizerInput,
   AdminProjectStatusInput,
 } from "./admin-projects.schema";
@@ -47,6 +48,7 @@ export const listAdminProjects = async (filters: {
             { customerUser: { displayName: { contains: filters.search } } },
             { organizerUser: { displayName: { contains: filters.search } } },
             { consultationRequest: { requestCode: { contains: filters.search } } },
+            { consultationRequest: { note: { contains: filters.search } } },
           ],
         }
       : {}),
@@ -65,7 +67,16 @@ export const listAdminProjects = async (filters: {
       include: {
         customerUser: { select: { id: true, displayName: true, email: true, phone: true } },
         organizerUser: { select: { id: true, displayName: true, email: true, avatarUrl: true } },
-        consultationRequest: { select: { id: true, requestCode: true, status: true } },
+        consultationRequest: {
+          select: {
+            id: true,
+            requestCode: true,
+            status: true,
+            customerName: true,
+            eventType: true,
+            note: true,
+          },
+        },
         _count: { select: { tasks: true, milestones: true, vendors: true, staffAssignments: true } },
       },
     }),
@@ -239,6 +250,52 @@ export const updateAdminProjectStatus = async (
 
   if (result.notification) emitCustomerNotification(result.notification);
   return result.updatedEvent;
+};
+
+export const updateAdminProjectName = async (
+  projectId: string,
+  adminUserId: string,
+  input: AdminProjectNameInput,
+) => {
+  const project = await prisma.event.findUnique({
+    where: { id: projectId },
+    select: { id: true, name: true },
+  });
+  if (!project) throw createError("NOT_FOUND", "Project not found", 404);
+  if (project.name === input.name) return project;
+
+  return prisma.$transaction(async (tx) => {
+    const updatedProject = await tx.event.update({
+      where: { id: projectId },
+      data: { name: input.name },
+      include: {
+        customerUser: { select: { id: true, displayName: true, email: true, phone: true } },
+        organizerUser: { select: { id: true, displayName: true, email: true, avatarUrl: true } },
+        consultationRequest: {
+          select: {
+            id: true,
+            requestCode: true,
+            status: true,
+            customerName: true,
+            eventType: true,
+            note: true,
+          },
+        },
+        _count: { select: { tasks: true, milestones: true, vendors: true, staffAssignments: true } },
+      },
+    });
+
+    await tx.eventActivity.create({
+      data: {
+        eventId: projectId,
+        actorUserId: adminUserId,
+        iconName: "edit",
+        message: `Admin da doi ten du an tu ${project.name} thanh ${input.name}.`,
+      },
+    });
+
+    return updatedProject;
+  });
 };
 
 export const updateAdminProjectOrganizer = async (
