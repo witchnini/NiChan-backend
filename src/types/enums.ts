@@ -24,13 +24,21 @@ export const RequestStatus = {
 } as const;
 export type RequestStatus = (typeof RequestStatus)[keyof typeof RequestStatus];
 
-// Allowed transitions for consultation requests
+const requestStatuses: RequestStatus[] = [
+  RequestStatus.NEW,
+  RequestStatus.REVIEWING,
+  RequestStatus.QUOTED,
+  RequestStatus.CONFIRMED,
+  RequestStatus.REJECTED,
+];
+
+// Admins can correct a mistaken selection by moving a request back to any other valid status.
 export const REQUEST_STATUS_TRANSITIONS: Record<RequestStatus, RequestStatus[]> = {
-  new: ["reviewing", "rejected"],
-  reviewing: ["quoted", "rejected"],
-  quoted: ["confirmed", "rejected"],
-  confirmed: [],
-  rejected: [],
+  new: requestStatuses.filter((status) => status !== RequestStatus.NEW),
+  reviewing: requestStatuses.filter((status) => status !== RequestStatus.REVIEWING),
+  quoted: requestStatuses.filter((status) => status !== RequestStatus.QUOTED),
+  confirmed: requestStatuses.filter((status) => status !== RequestStatus.CONFIRMED),
+  rejected: requestStatuses.filter((status) => status !== RequestStatus.REJECTED),
 };
 
 export const EventStatus = {

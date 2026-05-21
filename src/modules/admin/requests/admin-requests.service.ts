@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 import { emitNotification } from "../../../lib/socket";
 import { createError } from "../../../middleware/errorHandler";
@@ -29,6 +30,59 @@ const buildEventName = (request: {
   eventType: string;
   note?: string | null;
 }) => parseEventNameFromNote(request.note) ?? request.eventType;
+
+type ProjectRequest = {
+  id: string;
+  eventType: string;
+  eventDate?: Date | null;
+  locationText?: string | null;
+  guestCount?: number | null;
+  note?: string | null;
+  customerUserId?: string | null;
+  assignedManagerId?: string | null;
+};
+
+const buildEventData = (request: ProjectRequest & { customerUserId: string; assignedManagerId: string }) => ({
+  name: buildEventName(request),
+  type: request.eventType,
+  customerUserId: request.customerUserId,
+  organizerUserId: request.assignedManagerId,
+  consultationRequestId: request.id,
+  eventDate: request.eventDate,
+  locationText: request.locationText,
+  guestCount: request.guestCount,
+  summary: request.note,
+});
+
+const upsertProjectForConfirmedRequest = async (
+  tx: Prisma.TransactionClient,
+  request: ProjectRequest,
+  existingEventId?: string,
+) => {
+  if (!request.assignedManagerId) {
+    throw createError("CONFLICT", "Assign an organizer before confirming this request", 409);
+  }
+  if (!request.customerUserId) {
+    throw createError("CONFLICT", "Assign an organizer before confirming this request", 409);
+  }
+
+  const eventData = buildEventData({
+    ...request,
+    customerUserId: request.customerUserId,
+    assignedManagerId: request.assignedManagerId,
+  });
+
+  return existingEventId
+    ? tx.event.update({
+        where: { id: existingEventId },
+        data: eventData,
+        select: { id: true, name: true, status: true, organizerUserId: true },
+      })
+    : tx.event.create({
+        data: { ...eventData, status: "planning" },
+        select: { id: true, name: true, status: true, organizerUserId: true },
+      });
+};
 
 export const listRequests = async (filters: {
   status?: string;
@@ -162,42 +216,39 @@ export const assignManager = async (requestId: string, input: AssignManagerInput
       },
     });
 
-    const eventName = buildEventName(request);
-    const eventData = {
-      name: eventName,
-      type: request.eventType,
-      status: "planning",
-      customerUserId: customerUser.id,
-      organizerUserId: input.managerUserId,
-      consultationRequestId: request.id,
-      eventDate: request.eventDate,
-      locationText: request.locationText,
-      guestCount: request.guestCount,
-      summary: request.note,
-    };
-
-    const existingEventId = request.events[0]?.id;
-    const event = existingEventId
-      ? await tx.event.update({
-          where: { id: existingEventId },
-          data: eventData,
-          select: { id: true, name: true, status: true, organizerUserId: true },
-        })
-      : await tx.event.create({
-          data: eventData,
-          select: { id: true, name: true, status: true, organizerUserId: true },
-        });
+    const event =
+      request.status === "confirmed"
+        ? await upsertProjectForConfirmedRequest(
+            tx,
+            {
+              ...request,
+              customerUserId: customerUser.id,
+              assignedManagerId: input.managerUserId,
+            },
+            request.events[0]?.id,
+          )
+        : null;
 
     const notification = await tx.notification.create({
-      data: {
-        userId: input.managerUserId,
-        scope: "organizer",
-        type: "project",
-        title: "Du an moi duoc phan cong",
-        message: `Ban duoc phan cong du an ${event.name}`,
-        entityType: "event",
-        entityId: event.id,
-      },
+      data: event
+        ? {
+            userId: input.managerUserId,
+            scope: "organizer",
+            type: "project",
+            title: "Du an moi duoc phan cong",
+            message: `Ban duoc phan cong du an ${event.name}`,
+            entityType: "event",
+            entityId: event.id,
+          }
+        : {
+            userId: input.managerUserId,
+            scope: "organizer",
+            type: "request",
+            title: "Yeu cau moi duoc phan cong",
+            message: `Ban duoc phan cong phu trach yeu cau ${request.requestCode}`,
+            entityType: "consultation_request",
+            entityId: request.id,
+          },
     });
 
     return { updatedRequest, event, notification };
@@ -220,13 +271,25 @@ export const updateRequestStatus = async (requestId: string, input: UpdateReques
   const existing = await prisma.consultationRequest.findUnique({
     where: { id: requestId },
     select: {
+      id: true,
       status: true,
+      assignedManagerId: true,
+      customerUserId: true,
+      eventType: true,
+      eventDate: true,
+      locationText: true,
+      guestCount: true,
+      note: true,
       events: { select: { id: true, name: true } },
     },
   });
   if (!existing) throw createError("NOT_FOUND", "Request not found", 404);
 
   const currentStatus = existing.status as RequestStatus;
+  if (currentStatus === input.status) {
+    return prisma.consultationRequest.findUniqueOrThrow({ where: { id: requestId } });
+  }
+
   const allowed = REQUEST_STATUS_TRANSITIONS[currentStatus] ?? [];
   if (!allowed.includes(input.status as RequestStatus)) {
     throw createError(
@@ -242,7 +305,7 @@ export const updateRequestStatus = async (requestId: string, input: UpdateReques
     rejected: "rejectedAt",
   };
 
-  if (input.status === "confirmed" && existing.events.length === 0) {
+  if (input.status === "confirmed" && !existing.assignedManagerId) {
     throw createError("CONFLICT", "Assign an organizer before confirming this request", 409);
   }
 
@@ -257,7 +320,7 @@ export const updateRequestStatus = async (requestId: string, input: UpdateReques
 
     if (input.status !== "confirmed") return { updatedRequest, customerNotification: null };
 
-    const event = existing.events[0];
+    const event = await upsertProjectForConfirmedRequest(tx, existing, existing.events[0]?.id);
     const tracking = await ensureCustomerTrackingInTransaction(tx, event.id, {
       status: "contracted",
       activityMessage: `Su kien ${event.name} da duoc xac nhan va san sang theo doi.`,

@@ -17,7 +17,7 @@ import type {
 
 export const listOrganizerProjects = async (organizerUserId: string) => {
   return prisma.event.findMany({
-    where: { organizerUserId, status: { not: "cancelled" } },
+    where: { organizerUserId, status: { not: "cancelled" }, consultationRequest: { status: "confirmed" } },
     select: {
       id: true,
       name: true,
@@ -47,7 +47,7 @@ export const listOrganizerProjects = async (organizerUserId: string) => {
 
 export const getOrganizerProjectById = async (projectId: string, organizerUserId: string) => {
   const project = await prisma.event.findFirst({
-    where: { id: projectId, organizerUserId },
+    where: { id: projectId, organizerUserId, consultationRequest: { status: "confirmed" } },
     include: {
       customerUser: { select: { id: true, displayName: true, avatarUrl: true, email: true, phone: true } },
       organizerUser: { select: { id: true, displayName: true, avatarUrl: true, email: true, phone: true } },
@@ -97,7 +97,7 @@ export const recalculateProjectProgress = async (
 
 export const getKanban = async (projectId: string, organizerUserId: string) => {
   const event = await prisma.event.findFirst({
-    where: { id: projectId, organizerUserId },
+    where: { id: projectId, organizerUserId, consultationRequest: { status: "confirmed" } },
     select: {
       id: true,
       name: true,

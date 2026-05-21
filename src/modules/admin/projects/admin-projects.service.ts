@@ -38,6 +38,7 @@ export const listAdminProjects = async (filters: {
   sortOrder: "asc" | "desc";
 }) => {
   const where: Prisma.EventWhereInput = {
+    consultationRequest: { status: "confirmed" },
     ...(filters.status ? { status: filters.status } : {}),
     ...(filters.organizerId ? { organizerUserId: filters.organizerId } : {}),
     ...(filters.search
@@ -48,6 +49,8 @@ export const listAdminProjects = async (filters: {
             { customerUser: { displayName: { contains: filters.search } } },
             { organizerUser: { displayName: { contains: filters.search } } },
             { consultationRequest: { requestCode: { contains: filters.search } } },
+            { consultationRequest: { customerName: { contains: filters.search } } },
+            { consultationRequest: { eventType: { contains: filters.search } } },
             { consultationRequest: { note: { contains: filters.search } } },
           ],
         }
@@ -87,8 +90,8 @@ export const listAdminProjects = async (filters: {
 };
 
 export const getAdminProjectById = async (projectId: string) => {
-  const project = await prisma.event.findUnique({
-    where: { id: projectId },
+  const project = await prisma.event.findFirst({
+    where: { id: projectId, consultationRequest: { status: "confirmed" } },
     include: {
       customerUser: { select: { id: true, displayName: true, email: true, phone: true } },
       organizerUser: { select: { id: true, displayName: true, email: true, phone: true, avatarUrl: true } },
@@ -119,8 +122,8 @@ export const getAdminProjectById = async (projectId: string) => {
 };
 
 export const getAdminKanban = async (projectId: string) => {
-  const event = await prisma.event.findUnique({
-    where: { id: projectId },
+  const event = await prisma.event.findFirst({
+    where: { id: projectId, consultationRequest: { status: "confirmed" } },
     select: {
       id: true,
       name: true,
