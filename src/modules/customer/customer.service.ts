@@ -16,6 +16,16 @@ export const getCustomerDashboard = async (customerUserId: string) => {
         status: true,
         eventDate: true,
         progressPercent: true,
+        organizerUser: { select: { id: true, displayName: true, avatarUrl: true } },
+        customerUser: { select: { id: true, displayName: true } },
+        consultationRequest: {
+          select: {
+            id: true,
+            customerName: true,
+            eventType: true,
+            note: true,
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
       take: 5,
@@ -61,6 +71,15 @@ export const getCustomerEvents = async (
     },
     include: {
       organizerUser: { select: { id: true, displayName: true, avatarUrl: true } },
+      customerUser: { select: { id: true, displayName: true } },
+      consultationRequest: {
+        select: {
+          id: true,
+          customerName: true,
+          eventType: true,
+          note: true,
+        },
+      },
       _count: { select: { tasks: true, milestones: true } },
     },
     orderBy: { createdAt: "desc" },
@@ -72,6 +91,15 @@ export const getCustomerEventById = async (eventId: string, customerUserId: stri
     where: { id: eventId },
     include: {
       organizerUser: { select: { id: true, displayName: true, avatarUrl: true, phone: true } },
+      customerUser: { select: { id: true, displayName: true } },
+      consultationRequest: {
+        select: {
+          id: true,
+          customerName: true,
+          eventType: true,
+          note: true,
+        },
+      },
       milestones: { orderBy: { sortOrder: "asc" } },
       _count: { select: { tasks: true } },
     },
@@ -233,7 +261,22 @@ export const getCustomerContracts = async (customerUserId: string) => {
   return prisma.contract.findMany({
     where: { customerUserId },
     include: {
-      event: { select: { id: true, name: true } },
+      event: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          customerUser: { select: { id: true, displayName: true } },
+          consultationRequest: {
+            select: {
+              id: true,
+              customerName: true,
+              eventType: true,
+              note: true,
+            },
+          },
+        },
+      },
       versions: { take: 1, orderBy: { createdAt: "desc" } },
     },
     orderBy: { createdAt: "desc" },

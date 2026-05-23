@@ -167,9 +167,9 @@ export const updateProjectStatus = async (
     return activateCustomerTracking(projectId, {
       actorUserId: organizerUserId,
       status: "in_progress",
-      activityMessage: `Ban to chuc da bat dau trien khai su kien ${event.name}.`,
-      notificationTitle: "Su kien da bat dau trien khai",
-      notificationMessage: `Ban to chuc da bat dau trien khai su kien ${event.name}. Hay theo doi timeline va trao doi tren dashboard.`,
+      activityMessage: `Ban tổ chức đã bắt đầu triển khai sự kiện ${event.name}.`,
+      notificationTitle: "Sự kiện đã bắt đầu triển khai",
+      notificationMessage: `Ban tổ chức đã bắt đầu triển khai sự kiện ${event.name}. Hãy theo dõi timeline và trao đổi trên dashboard.`,
     });
   }
 
@@ -177,9 +177,9 @@ export const updateProjectStatus = async (
     ensureCustomerTrackingInTransaction(tx, projectId, {
       actorUserId: organizerUserId,
       status: "completed",
-      activityMessage: `Su kien ${event.name} da duoc danh dau hoan thanh.`,
-      notificationTitle: "Su kien da hoan thanh",
-      notificationMessage: `Su kien ${event.name} da hoan thanh. Ban co the xem lai tai lieu, thanh toan va gui danh gia.`,
+      activityMessage: `Sự kiện ${event.name} đã được đánh dấu hoàn thành.`,
+      notificationTitle: "Sự kiện đã hoàn thành",
+      notificationMessage: `Sự kiện ${event.name} đã hoàn thành. Bạn có thể xem lại tài liệu, thanh toán và gửi đánh giá.`,
     }),
   );
   emitCustomerNotification(result.notification);

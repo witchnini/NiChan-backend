@@ -155,24 +155,24 @@ export const getAdminKanban = async (projectId: string) => {
 const buildStatusNotification = (eventName: string, status: AdminProjectStatusInput["status"]) => {
   if (status === "contracted") {
     return {
-      activityMessage: `Admin da xac nhan su kien ${eventName}.`,
-      notificationTitle: "Su kien da duoc xac nhan",
-      notificationMessage: `Su kien ${eventName} da duoc xac nhan. Ban co the theo doi tien do tren dashboard.`,
+      activityMessage: `Admin đã xác nhận sự kiện ${eventName}.`,
+      notificationTitle: "Sự kiện đã được xác nhận",
+      notificationMessage: `Sự kiện ${eventName} đã được xác nhận. Bạn có thể theo dõi tiến độ trên dashboard.`,
     };
   }
 
   if (status === "in_progress") {
     return {
-      activityMessage: `Admin da dua su kien ${eventName} vao giai doan trien khai.`,
-      notificationTitle: "Su kien dang trien khai",
-      notificationMessage: `Su kien ${eventName} da bat dau trien khai. Timeline va trao doi duoc cap nhat trong trang theo doi.`,
+      activityMessage: `Admin đã đưa sự kiện ${eventName} vào giai đoạn triển khai.`,
+      notificationTitle: "Sự kiện đang triển khai",
+      notificationMessage: `Sự kiện ${eventName} đã bắt đầu triển khai. Timeline và trao đổi được cập nhật trong trang theo dõi.`,
     };
   }
 
   return {
-    activityMessage: `Su kien ${eventName} da duoc danh dau hoan thanh.`,
-    notificationTitle: "Su kien da hoan thanh",
-    notificationMessage: `Su kien ${eventName} da hoan thanh. Ban co the xem lai thong tin va gui danh gia.`,
+    activityMessage: `Sự kiện ${eventName} đã được đánh dấu hoàn thành.`,
+    notificationTitle: "Sự kiện đã hoàn thành",
+    notificationMessage: `Sự kiện ${eventName} đã hoàn thành. Bạn có thể xem lại thông tin và gửi đánh giá.`,
   };
 };
 
@@ -218,8 +218,8 @@ export const updateAdminProjectStatus = async (
         iconName: input.status === "cancelled" ? "x" : "edit",
         message:
           input.status === "cancelled"
-            ? `Admin da huy su kien ${event.name}.`
-            : `Admin da cap nhat trang thai su kien ${event.name} thanh ${input.status}.`,
+            ? `Admin đã hủy sự kiện ${event.name}.`
+            : `Admin đã cập nhật trạng thái sự kiện ${event.name} thành ${input.status}.`,
       },
     });
 
@@ -230,8 +230,8 @@ export const updateAdminProjectStatus = async (
               userId: event.customerUserId,
               scope: "customer",
               type: "project",
-              title: "Su kien da bi huy",
-              message: `Su kien ${event.name} da bi huy. Vui long lien he NiChan neu can ho tro.`,
+              title: "Sự kiện đã bị hủy",
+              message: `Sự kiện ${event.name} đã bị hủy. Vui lòng liên hệ NiChan nếu cần hỗ trợ.`,
               entityType: "event",
               entityId: projectId,
             },
@@ -293,7 +293,7 @@ export const updateAdminProjectName = async (
         eventId: projectId,
         actorUserId: adminUserId,
         iconName: "edit",
-        message: `Admin da doi ten du an tu ${project.name} thanh ${input.name}.`,
+        message: `Admin đã đổi tên dự án từ ${project.name} thành ${input.name}.`,
       },
     });
 
@@ -342,7 +342,7 @@ export const updateAdminProjectOrganizer = async (
         eventId: projectId,
         actorUserId: input.organizerUserId,
         iconName: "user",
-        message: `Du an ${project.name} da duoc phan cong cho organizer.`,
+        message: `Dự án ${project.name} đã được phân công cho organizer.`,
       },
     });
 
@@ -351,8 +351,8 @@ export const updateAdminProjectOrganizer = async (
         userId: input.organizerUserId,
         scope: "organizer",
         type: "project",
-        title: "Du an moi duoc phan cong",
-        message: `Ban duoc phan cong du an ${project.name}.`,
+        title: "Dự án mới được phân công",
+        message: `Bạn được phân công dự án ${project.name}.`,
         entityType: "event",
         entityId: projectId,
       },

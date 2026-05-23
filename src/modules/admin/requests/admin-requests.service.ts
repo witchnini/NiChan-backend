@@ -323,9 +323,9 @@ export const updateRequestStatus = async (requestId: string, input: UpdateReques
     const event = await upsertProjectForConfirmedRequest(tx, existing, existing.events[0]?.id);
     const tracking = await ensureCustomerTrackingInTransaction(tx, event.id, {
       status: "contracted",
-      activityMessage: `Su kien ${event.name} da duoc xac nhan va san sang theo doi.`,
-      notificationTitle: "Su kien da duoc xac nhan",
-      notificationMessage: `Su kien ${event.name} da duoc xac nhan. Ban co the theo doi tien do tren dashboard.`,
+      activityMessage: `Sự kiện ${event.name} đã được xác nhận và sẵn sàng theo dõi.`,
+      notificationTitle: "Sự kiện đã được xác nhận",
+      notificationMessage: `Sự kiện ${event.name} đã được xác nhận. Bạn có thể theo dõi tiến độ trên dashboard.`,
     });
 
     return { updatedRequest, customerNotification: tracking.notification };

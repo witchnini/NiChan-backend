@@ -209,14 +209,14 @@ export const assignStaffToEvent = async (
         eventId: input.eventId,
         actorUserId,
         iconName: "users",
-        message: `${event.organizerUser?.displayName ?? "Organizer"} da them ${staff.displayName} vao nhan su du an voi vai tro ${input.roleText}.`,
+        message: `${event.organizerUser?.displayName ?? "Organizer"} đã thêm ${staff.displayName} vào nhân sự dự án với vai trò ${input.roleText}.`,
       },
     });
 
     const notifications = await notifyAdminsOfProjectStaffChange(
       tx,
       input.eventId,
-      `${event.organizerUser?.displayName ?? "Organizer"} da them ${staff.displayName} vao du an ${event.name} voi vai tro ${input.roleText}.`,
+      `${event.organizerUser?.displayName ?? "Organizer"} đã thêm ${staff.displayName} vào dự án ${event.name} với vai trò ${input.roleText}.`,
     );
 
     return { assignment, notifications };
@@ -275,7 +275,7 @@ export const updateStaffAssignment = async (
 
     const nextRole = input.roleText ?? existing.roleText;
     const nextStatus = input.status ?? existing.status;
-    const message = `${existing.event.organizerUser?.displayName ?? "Organizer"} da cap nhat ${existing.staffUser.displayName} trong du an ${existing.event.name}: vai tro ${nextRole}, trang thai ${nextStatus}.`;
+    const message = `${existing.event.organizerUser?.displayName ?? "Organizer"} đã cập nhật ${existing.staffUser.displayName} trong dự án ${existing.event.name}: vai trò ${nextRole}, trạng thái ${nextStatus}.`;
 
     await tx.eventActivity.create({
       data: {
@@ -322,7 +322,7 @@ export const removeStaffFromEvent = async (
   const notifications = await prisma.$transaction(async (tx) => {
     await tx.eventStaffAssignment.delete({ where: { id: assignmentId } });
 
-    const message = `${existing.event.organizerUser?.displayName ?? "Organizer"} da go ${existing.staffUser.displayName} khoi nhan su du an ${existing.event.name}.`;
+    const message = `${existing.event.organizerUser?.displayName ?? "Organizer"} đã gỡ ${existing.staffUser.displayName} khỏi nhân sự dự án ${existing.event.name}.`;
 
     await tx.eventActivity.create({
       data: {

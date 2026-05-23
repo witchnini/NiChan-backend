@@ -32,29 +32,29 @@ const addDays = (value: Date, days: number) => {
 
 const defaultMilestones = (eventDate?: Date | null) => [
   {
-    title: "Kickoff du an",
-    description: "Thong tin su kien da san sang de khach hang theo doi.",
+    title: "Kickoff dự án",
+    description: "Thông tin sự kiện đã sẵn sàng để khách hàng theo dõi.",
     milestoneDate: null,
     status: "done",
     sortOrder: 10,
   },
   {
-    title: "Chot ke hoach",
-    description: "Thong nhat timeline, hang muc cong viec va nguon luc chinh.",
+    title: "Chốt kế hoạch",
+    description: "Thống nhất timeline, hạng mục công việc và nguồn lực chính.",
     milestoneDate: eventDate ? addDays(eventDate, -14) : null,
     status: "todo",
     sortOrder: 20,
   },
   {
-    title: "Trien khai su kien",
-    description: "Ban to chuc tien hanh setup va dieu phoi su kien.",
+    title: "Triển khai sự kiện",
+    description: "Ban tổ chức tiến hành setup và điều phối sự kiện.",
     milestoneDate: eventDate ?? null,
     status: "todo",
     sortOrder: 30,
   },
   {
-    title: "Nghiem thu va hoan tat",
-    description: "Tong ket, ban giao tai lieu va hoan tat thanh toan.",
+    title: "Nghiệm thu và hoàn tất",
+    description: "Tổng kết, bàn giao tài liệu và hoàn tất thanh toán.",
     milestoneDate: eventDate ? addDays(eventDate, 1) : null,
     status: "todo",
     sortOrder: 40,
