@@ -136,7 +136,7 @@ export const getKanban = async (projectId: string, organizerUserId: string) => {
   return { project: event, columns };
 };
 
-const customerTrackingStatuses = ["contracted", "in_progress", "completed"] as const;
+const customerTrackingStatuses = ["contracted", "quoted", "planning", "in_progress", "completed"] as const;
 type CustomerTrackingStatus = (typeof customerTrackingStatuses)[number];
 
 const isCustomerTrackingStatus = (
@@ -153,6 +153,22 @@ const buildOrganizerStatusNotification = (
       activityMessage: `Ban tổ chức đã xác nhận sự kiện ${eventName}.`,
       notificationTitle: "Sự kiện đã được xác nhận",
       notificationMessage: `Sự kiện ${eventName} đã được xác nhận. Bạn có thể theo dõi tiến độ trên dashboard.`,
+    };
+  }
+
+  if (status === "quoted") {
+    return {
+      activityMessage: `Ban tổ chức đã báo giá sự kiện ${eventName}.`,
+      notificationTitle: "Sự kiện đã được báo giá",
+      notificationMessage: `Sự kiện ${eventName} đã được báo giá. Bạn có thể xem chi tiết trên dashboard.`,
+    };
+  }
+
+  if (status === "planning") {
+    return {
+      activityMessage: `Ban tổ chức đã đưa sự kiện ${eventName} vào giai đoạn lập kế hoạch.`,
+      notificationTitle: "Sự kiện đang lập kế hoạch",
+      notificationMessage: `Sự kiện ${eventName} đã bắt đầu lập kế hoạch. Bạn có thể theo dõi tiến độ trên dashboard.`,
     };
   }
 

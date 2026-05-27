@@ -74,7 +74,10 @@ export const listVendors = async (filters: {
       skip: filters.skip,
       take: filters.take,
       orderBy: { name: "asc" },
-      include: { category: { select: { id: true, name: true } } },
+      include: {
+        category: { select: { id: true, name: true } },
+        _count: { select: { eventVendors: true } },
+      },
     }),
     prisma.vendor.count({ where }),
   ]);
@@ -87,6 +90,7 @@ export const getVendorById = async (id: string) => {
     where: { id },
     include: {
       category: { select: { id: true, name: true } },
+      _count: { select: { eventVendors: true } },
       budgetItems: { select: { id: true, category: true, estimatedAmount: true, actualAmount: true } },
       eventVendors: { select: { id: true, eventId: true, status: true, serviceNote: true } },
     },
@@ -110,7 +114,10 @@ export const createVendor = async (input: VendorInput) => {
       note: input.note,
       status: input.status,
     },
-    include: { category: { select: { id: true, name: true } } },
+    include: {
+      category: { select: { id: true, name: true } },
+      _count: { select: { eventVendors: true } },
+    },
   });
 };
 
@@ -130,7 +137,10 @@ export const updateVendor = async (id: string, input: Partial<VendorInput>) => {
       ...(input.note !== undefined ? { note: input.note } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
     },
-    include: { category: { select: { id: true, name: true } } },
+    include: {
+      category: { select: { id: true, name: true } },
+      _count: { select: { eventVendors: true } },
+    },
   });
 };
 
@@ -140,7 +150,10 @@ export const updateVendorStatus = async (id: string, status: string) => {
   return prisma.vendor.update({
     where: { id },
     data: { status },
-    include: { category: { select: { id: true, name: true } } },
+    include: {
+      category: { select: { id: true, name: true } },
+      _count: { select: { eventVendors: true } },
+    },
   });
 };
 

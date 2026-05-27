@@ -161,6 +161,22 @@ const buildStatusNotification = (eventName: string, status: AdminProjectStatusIn
     };
   }
 
+  if (status === "quoted") {
+    return {
+      activityMessage: `Admin đã báo giá sự kiện ${eventName}.`,
+      notificationTitle: "Sự kiện đã được báo giá",
+      notificationMessage: `Sự kiện ${eventName} đã được báo giá. Bạn có thể xem chi tiết trên dashboard.`,
+    };
+  }
+
+  if (status === "planning") {
+    return {
+      activityMessage: `Admin đã đưa sự kiện ${eventName} vào giai đoạn lập kế hoạch.`,
+      notificationTitle: "Sự kiện đang lập kế hoạch",
+      notificationMessage: `Sự kiện ${eventName} đã bắt đầu lập kế hoạch. Bạn có thể theo dõi tiến độ trên dashboard.`,
+    };
+  }
+
   if (status === "in_progress") {
     return {
       activityMessage: `Admin đã đưa sự kiện ${eventName} vào giai đoạn triển khai.`,
@@ -188,12 +204,12 @@ export const updateAdminProjectStatus = async (
   if (!event) throw createError("NOT_FOUND", "Project not found", 404);
   if (event.status === input.status) return event;
 
-  if (["contracted", "in_progress", "completed"].includes(input.status)) {
+  if (["contracted", "quoted", "planning", "in_progress", "completed"].includes(input.status)) {
     const copy = buildStatusNotification(event.name, input.status);
     const result = await prisma.$transaction((tx) =>
       ensureCustomerTrackingInTransaction(tx, projectId, {
         actorUserId: adminUserId,
-        status: input.status as "contracted" | "in_progress" | "completed",
+        status: input.status as "contracted" | "quoted" | "planning" | "in_progress" | "completed",
         ...copy,
       }),
     );

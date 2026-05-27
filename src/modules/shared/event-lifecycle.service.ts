@@ -7,7 +7,7 @@ type Tx = Prisma.TransactionClient;
 
 type CustomerTrackingOptions = {
   actorUserId?: string | null;
-  status: "contracted" | "in_progress" | "completed";
+  status: "contracted" | "quoted" | "planning" | "in_progress" | "completed";
   activityMessage: string;
   notificationTitle: string;
   notificationMessage: string;
@@ -80,12 +80,19 @@ export const ensureCustomerTrackingInTransaction = async (
   });
   if (!event) throw createError("NOT_FOUND", "Event not found", 404);
 
+  const statusProgress: Record<string, number> = {
+    contracted: 10,
+    quoted: 25,
+    planning: 40,
+    in_progress: 60,
+    completed: 100,
+  };
+
+  const targetProgress = statusProgress[options.status] ?? 0;
   const progressPatch =
     options.status === "completed"
       ? { progressPercent: 100, completedAt: new Date() }
-      : options.status === "in_progress"
-        ? { progressPercent: Math.max(event.progressPercent, 25), completedAt: null }
-        : { progressPercent: Math.max(event.progressPercent, 10), completedAt: null };
+      : { progressPercent: targetProgress, completedAt: null };
 
   const updatedEvent = await tx.event.update({
     where: { id: eventId },

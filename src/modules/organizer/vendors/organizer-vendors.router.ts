@@ -13,6 +13,7 @@ import {
   createVendor,
   updateVendor,
   updateVendorStatus,
+  deleteVendor,
   getEventVendors,
   addEventVendor,
   removeEventVendor,
@@ -75,6 +76,12 @@ organizerVendorsRouter.patch(
     sendSuccess(res, { data });
   },
 );
+
+// DELETE /api/organizer/vendors/:id
+organizerVendorsRouter.delete("/vendors/:id", async (req: Request, res: Response) => {
+  const data = await deleteVendor(p(req, "id"));
+  sendSuccess(res, { data });
+});
 
 // GET /api/organizer/projects/:projectId/vendors
 organizerVendorsRouter.get(

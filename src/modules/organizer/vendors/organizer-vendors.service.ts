@@ -54,7 +54,10 @@ export const listVendors = async (filters: {
       skip: filters.skip,
       take: filters.take,
       orderBy: { name: "asc" },
-      include: { category: { select: { id: true, name: true } } },
+      include: {
+        category: { select: { id: true, name: true } },
+        _count: { select: { eventVendors: true } },
+      },
     }),
     prisma.vendor.count({ where }),
   ]);
@@ -65,7 +68,10 @@ export const listVendors = async (filters: {
 export const getVendorById = async (id: string) => {
   const vendor = await prisma.vendor.findUnique({
     where: { id },
-    include: { category: { select: { id: true, name: true } } },
+    include: {
+      category: { select: { id: true, name: true } },
+      _count: { select: { eventVendors: true } },
+    },
   });
   if (!vendor) throw createError("NOT_FOUND", "Vendor not found", 404);
   return vendor;
@@ -83,20 +89,57 @@ export const createVendor = async (input: VendorInput) => {
       note: input.note,
       status: "active",
     },
-    include: { category: { select: { id: true, name: true } } },
+    include: {
+      category: { select: { id: true, name: true } },
+      _count: { select: { eventVendors: true } },
+    },
   });
 };
 
 export const updateVendor = async (id: string, input: Partial<VendorInput>) => {
   const existing = await prisma.vendor.findUnique({ where: { id } });
   if (!existing) throw createError("NOT_FOUND", "Vendor not found", 404);
-  return prisma.vendor.update({ where: { id }, data: input });
+  return prisma.vendor.update({
+    where: { id },
+    data: input,
+    include: {
+      category: { select: { id: true, name: true } },
+      _count: { select: { eventVendors: true } },
+    },
+  });
 };
 
 export const updateVendorStatus = async (id: string, status: string) => {
   const existing = await prisma.vendor.findUnique({ where: { id } });
   if (!existing) throw createError("NOT_FOUND", "Vendor not found", 404);
-  return prisma.vendor.update({ where: { id }, data: { status } });
+  return prisma.vendor.update({
+    where: { id },
+    data: { status },
+    include: {
+      category: { select: { id: true, name: true } },
+      _count: { select: { eventVendors: true } },
+    },
+  });
+};
+
+export const deleteVendor = async (id: string) => {
+  const existing = await prisma.vendor.findUnique({ where: { id } });
+  if (!existing) throw createError("NOT_FOUND", "Vendor not found", 404);
+
+  const linkedProjects = await prisma.eventVendor.count({ where: { vendorId: id } });
+  if (linkedProjects > 0) {
+    return prisma.vendor.update({
+      where: { id },
+      data: { status: "inactive" },
+      include: {
+        category: { select: { id: true, name: true } },
+        _count: { select: { eventVendors: true } },
+      },
+    });
+  }
+
+  await prisma.vendor.delete({ where: { id } });
+  return { deleted: true };
 };
 
 // ─── Event Vendors ────────────────────────────────────────────────────────────
