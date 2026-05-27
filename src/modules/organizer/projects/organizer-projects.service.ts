@@ -2,7 +2,6 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 import { createError } from "../../../middleware/errorHandler";
 import {
-  activateCustomerTracking,
   emitCustomerNotification,
   ensureCustomerTrackingInTransaction,
 } from "../../shared/event-lifecycle.service";
@@ -17,7 +16,7 @@ import type {
 
 export const listOrganizerProjects = async (organizerUserId: string) => {
   return prisma.event.findMany({
-    where: { organizerUserId, status: { not: "cancelled" }, consultationRequest: { status: "confirmed" } },
+    where: { organizerUserId, consultationRequest: { status: "confirmed" } },
     select: {
       id: true,
       name: true,
@@ -137,6 +136,50 @@ export const getKanban = async (projectId: string, organizerUserId: string) => {
   return { project: event, columns };
 };
 
+const customerTrackingStatuses = ["contracted", "in_progress", "completed"] as const;
+type CustomerTrackingStatus = (typeof customerTrackingStatuses)[number];
+
+const isCustomerTrackingStatus = (
+  status: UpdateProjectStatusInput["status"],
+): status is CustomerTrackingStatus =>
+  customerTrackingStatuses.includes(status as CustomerTrackingStatus);
+
+const buildOrganizerStatusNotification = (
+  eventName: string,
+  status: CustomerTrackingStatus,
+) => {
+  if (status === "contracted") {
+    return {
+      activityMessage: `Ban tổ chức đã xác nhận sự kiện ${eventName}.`,
+      notificationTitle: "Sự kiện đã được xác nhận",
+      notificationMessage: `Sự kiện ${eventName} đã được xác nhận. Bạn có thể theo dõi tiến độ trên dashboard.`,
+    };
+  }
+
+  if (status === "in_progress") {
+    return {
+      activityMessage: `Ban tổ chức đã bắt đầu triển khai sự kiện ${eventName}.`,
+      notificationTitle: "Sự kiện đã bắt đầu triển khai",
+      notificationMessage: `Ban tổ chức đã bắt đầu triển khai sự kiện ${eventName}. Hãy theo dõi timeline và trao đổi trên dashboard.`,
+    };
+  }
+
+  return {
+    activityMessage: `Sự kiện ${eventName} đã được đánh dấu hoàn thành.`,
+    notificationTitle: "Sự kiện đã hoàn thành",
+    notificationMessage: `Sự kiện ${eventName} đã hoàn thành. Bạn có thể xem lại tài liệu, thanh toán và gửi đánh giá.`,
+  };
+};
+
+const projectStatusLabel: Record<UpdateProjectStatusInput["status"], string> = {
+  planning: "Lập kế hoạch",
+  quoted: "Đã báo giá",
+  contracted: "Đã xác nhận",
+  in_progress: "Đang triển khai",
+  completed: "Hoàn thành",
+  cancelled: "Đã hủy",
+};
+
 export const updateProjectStatus = async (
   projectId: string,
   organizerUserId: string,
@@ -144,46 +187,74 @@ export const updateProjectStatus = async (
 ) => {
   const event = await prisma.event.findFirst({
     where: { id: projectId, organizerUserId },
-    select: { id: true, name: true, status: true },
+    select: { id: true, name: true, status: true, customerUserId: true },
   });
   if (!event) throw createError("NOT_FOUND", "Project not found", 404);
   if (event.status === input.status) return event;
 
-  const allowed: Record<string, UpdateProjectStatusInput["status"][]> = {
-    planning: ["in_progress"],
-    quoted: ["in_progress"],
-    contracted: ["in_progress"],
-    in_progress: ["completed"],
-  };
-  if (!(allowed[event.status] ?? []).includes(input.status)) {
-    throw createError(
-      "INVALID_STATUS_TRANSITION",
-      `Cannot transition project from '${event.status}' to '${input.status}'`,
-      422,
+  if (isCustomerTrackingStatus(input.status)) {
+    const nextStatus = input.status;
+    const copy = buildOrganizerStatusNotification(event.name, nextStatus);
+    const result = await prisma.$transaction((tx) =>
+      ensureCustomerTrackingInTransaction(tx, projectId, {
+        actorUserId: organizerUserId,
+        status: nextStatus,
+        ...copy,
+      }),
     );
+    emitCustomerNotification(result.notification);
+    return result.event;
   }
 
-  if (input.status === "in_progress") {
-    return activateCustomerTracking(projectId, {
-      actorUserId: organizerUserId,
-      status: "in_progress",
-      activityMessage: `Ban tổ chức đã bắt đầu triển khai sự kiện ${event.name}.`,
-      notificationTitle: "Sự kiện đã bắt đầu triển khai",
-      notificationMessage: `Ban tổ chức đã bắt đầu triển khai sự kiện ${event.name}. Hãy theo dõi timeline và trao đổi trên dashboard.`,
+  const result = await prisma.$transaction(async (tx) => {
+    const updatedEvent = await tx.event.update({
+      where: { id: projectId },
+      data: { status: input.status, completedAt: null },
+      select: { id: true, name: true, status: true, progressPercent: true },
     });
-  }
 
-  const result = await prisma.$transaction((tx) =>
-    ensureCustomerTrackingInTransaction(tx, projectId, {
-      actorUserId: organizerUserId,
-      status: "completed",
-      activityMessage: `Sự kiện ${event.name} đã được đánh dấu hoàn thành.`,
-      notificationTitle: "Sự kiện đã hoàn thành",
-      notificationMessage: `Sự kiện ${event.name} đã hoàn thành. Bạn có thể xem lại tài liệu, thanh toán và gửi đánh giá.`,
-    }),
-  );
-  emitCustomerNotification(result.notification);
-  return result.event;
+    await tx.eventActivity.create({
+      data: {
+        eventId: projectId,
+        actorUserId: organizerUserId,
+        iconName: input.status === "cancelled" ? "x" : "edit",
+        message:
+          input.status === "cancelled"
+            ? `Ban tổ chức đã hủy sự kiện ${event.name}.`
+            : `Ban tổ chức đã cập nhật trạng thái sự kiện ${event.name} thành ${projectStatusLabel[input.status]}.`,
+      },
+    });
+
+    const notification =
+      input.status === "cancelled"
+        ? await tx.notification.create({
+            data: {
+              userId: event.customerUserId,
+              scope: "customer",
+              type: "project",
+              title: "Sự kiện đã bị hủy",
+              message: `Sự kiện ${event.name} đã bị hủy. Vui lòng liên hệ NiChan nếu cần hỗ trợ.`,
+              entityType: "event",
+              entityId: projectId,
+            },
+            select: {
+              id: true,
+              userId: true,
+              type: true,
+              title: true,
+              message: true,
+              entityType: true,
+              entityId: true,
+              createdAt: true,
+            },
+          })
+        : null;
+
+    return { updatedEvent, notification };
+  });
+
+  if (result.notification) emitCustomerNotification(result.notification);
+  return result.updatedEvent;
 };
 
 // ─── Tasks CRUD ───────────────────────────────────────────────────────────────

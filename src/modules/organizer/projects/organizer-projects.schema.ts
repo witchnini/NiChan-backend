@@ -16,7 +16,14 @@ export const updateTaskStatusSchema = z.object({
 });
 
 export const updateProjectStatusSchema = z.object({
-  status: z.enum(["in_progress", "completed"]),
+  status: z.enum([
+    "planning",
+    "quoted",
+    "contracted",
+    "in_progress",
+    "completed",
+    "cancelled",
+  ]),
 });
 
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
