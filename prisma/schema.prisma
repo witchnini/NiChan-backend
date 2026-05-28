@@ -352,6 +352,7 @@ model Vendor {
   categoryId  String
   phone       String?
   email       String?
+  bankAccountNumber String?
   contactName String?
   address     String
   ratingAvg   Decimal?
