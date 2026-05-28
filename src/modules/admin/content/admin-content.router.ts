@@ -7,6 +7,15 @@ import { sendSuccess } from "../../../utils/response";
 import {
   portfolioSchema,
   blogPostSchema,
+  serviceSchema,
+  serviceCategorySchema,
+  listServiceCategories,
+  createServiceCategory,
+  deleteServiceCategory,
+  listServices,
+  createService,
+  updateService,
+  deleteService,
   listPortfolio,
   createPortfolio,
   updatePortfolio,
@@ -22,6 +31,52 @@ import {
 
 export const adminContentRouter = Router();
 adminContentRouter.use(authenticate, requireRole("admin"));
+
+// ─── Service Categories ──────────────────────────────────────────────────────
+
+adminContentRouter.get("/service-categories", async (_req: Request, res: Response) => {
+  const data = await listServiceCategories();
+  sendSuccess(res, { data });
+});
+
+adminContentRouter.post("/service-categories", validate(serviceCategorySchema), async (req: Request, res: Response) => {
+  const data = await createServiceCategory(req.body);
+  sendSuccess(res, { data, status: 201 });
+});
+
+adminContentRouter.delete("/service-categories/:id", async (req: Request, res: Response) => {
+  const data = await deleteServiceCategory(p(req, "id"));
+  sendSuccess(res, { data });
+});
+
+// ─── Services ────────────────────────────────────────────────────────────────
+
+adminContentRouter.get("/services", async (req: Request, res: Response) => {
+  const pg = parsePagination(req, "title");
+  const { items, total } = await listServices({
+    categorySlug: q(req, "categorySlug"),
+    active: q(req, "active"),
+    search: q(req, "search"),
+    skip: pg.skip,
+    take: pg.take,
+  });
+  sendSuccess(res, { data: items, meta: buildMeta(pg, total) });
+});
+
+adminContentRouter.post("/services", validate(serviceSchema), async (req: Request, res: Response) => {
+  const data = await createService(req.body);
+  sendSuccess(res, { data, status: 201 });
+});
+
+adminContentRouter.put("/services/:id", validate(serviceSchema.partial()), async (req: Request, res: Response) => {
+  const data = await updateService(p(req, "id"), req.body);
+  sendSuccess(res, { data });
+});
+
+adminContentRouter.delete("/services/:id", async (req: Request, res: Response) => {
+  await deleteService(p(req, "id"));
+  sendSuccess(res, { data: { deleted: true } });
+});
 
 // ─── Portfolio ────────────────────────────────────────────────────────────────
 
