@@ -21,9 +21,9 @@ uploadRouter.post(
     }
 
     const folder = `nichan/${String(req.body.folder ?? "general").replace(/[^a-zA-Z0-9-_/]/g, "")}`;
-    const url = await uploadToCloudinary(req.file.buffer, folder);
+    const url = await uploadToCloudinary(req.file.buffer, folder, req.file.originalname);
 
-    sendSuccess(res, { data: { url }, status: 201 });
+    sendSuccess(res, { data: { url: toPublicUrl(req, url) }, status: 201 });
   },
 );
 
@@ -40,7 +40,12 @@ uploadRouter.post(
       throw createError("VALIDATION_ERROR", "No file uploaded", 400);
     }
 
-    const url = await uploadToCloudinary(req.file.buffer, "nichan/avatars");
-    sendSuccess(res, { data: { url }, status: 201 });
+    const url = await uploadToCloudinary(req.file.buffer, "nichan/avatars", req.file.originalname);
+    sendSuccess(res, { data: { url: toPublicUrl(req, url) }, status: 201 });
   },
 );
+
+const toPublicUrl = (req: Request, url: string) => {
+  if (!url.startsWith("/")) return url;
+  return `${req.protocol}://${req.get("host")}${url}`;
+};

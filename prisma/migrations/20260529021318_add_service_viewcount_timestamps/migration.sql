@@ -1,0 +1,4 @@
+-- AlterTable: add viewCount, createdAt, updatedAt to services
+ALTER TABLE "services" ADD COLUMN "viewCount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "services" ADD COLUMN "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "services" ADD COLUMN "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

@@ -293,7 +293,16 @@ export const updateBlogPost = async (id: string, input: Partial<BlogPostInput>, 
   if (!existing) throw createError("NOT_FOUND", "Blog post not found", 404);
   return prisma.blogPost.update({
     where: { id },
-    data: { ...input, updatedById, publishedAt: input.publishedAt ? new Date(input.publishedAt) : undefined },
+    data: {
+      ...input,
+      updatedById,
+      publishedAt:
+        input.publishedAt === null
+          ? null
+          : input.publishedAt
+            ? new Date(input.publishedAt)
+            : undefined,
+    },
   });
 };
 

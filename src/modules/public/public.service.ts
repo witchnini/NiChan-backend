@@ -48,6 +48,10 @@ export const getServiceBySlug = async (slug: string) => {
   if (!service) {
     throw createError("NOT_FOUND", "Service not found", 404);
   }
+
+  // Increment view count (fire-and-forget)
+  prisma.service.update({ where: { slug }, data: { viewCount: { increment: 1 } } }).catch(() => {});
+
   return service;
 };
 
@@ -64,6 +68,21 @@ export const getPortfolio = async (filters: {
     },
     orderBy: { publishedAt: "desc" },
   });
+};
+
+export const getPortfolioBySlug = async (slug: string) => {
+  const item = await prisma.portfolioItem.findUnique({
+    where: { slug },
+  });
+
+  if (!item) {
+    throw createError("NOT_FOUND", "Portfolio item not found", 404);
+  }
+
+  // Increment view count (fire-and-forget)
+  prisma.portfolioItem.update({ where: { slug }, data: { viewCount: { increment: 1 } } }).catch(() => {});
+
+  return item;
 };
 
 // ─── Blog Posts ───────────────────────────────────────────────────────────────

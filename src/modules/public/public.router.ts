@@ -5,6 +5,7 @@ import {
   getBlogPostById,
   getBlogPosts,
   getPortfolio,
+  getPortfolioBySlug,
   getReviewCriteria,
   getServiceBySlug,
   getServiceCategories,
@@ -42,6 +43,12 @@ publicRouter.get("/portfolio", async (req: Request, res: Response) => {
     category: req.query.category as string | undefined,
     visibleOnly: req.query.visibleOnly as string | undefined,
   });
+  sendSuccess(res, { data });
+});
+
+// GET /api/public/portfolio/:slug
+publicRouter.get("/portfolio/:slug", async (req: Request, res: Response) => {
+  const data = await getPortfolioBySlug(String(req.params.slug));
   sendSuccess(res, { data });
 });
 

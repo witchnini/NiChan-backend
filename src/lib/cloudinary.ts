@@ -1,4 +1,7 @@
 import { v2 as cloudinary } from "cloudinary";
+import { randomUUID } from "crypto";
+import { mkdir, writeFile } from "fs/promises";
+import path from "path";
 import multer from "multer";
 import { env } from "../config/env";
 
@@ -30,7 +33,16 @@ export const upload = multer({
 export const uploadToCloudinary = (
   buffer: Buffer,
   folder: string,
+  originalName = "image.jpg",
 ): Promise<string> => {
+  const hasCloudinaryConfig = Boolean(
+    env.cloudinaryCloudName && env.cloudinaryApiKey && env.cloudinaryApiSecret,
+  );
+
+  if (!hasCloudinaryConfig) {
+    return uploadToLocalStorage(buffer, folder, originalName);
+  }
+
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       { folder, resource_type: "image" },
@@ -42,6 +54,22 @@ export const uploadToCloudinary = (
     );
     stream.end(buffer);
   });
+};
+
+const uploadToLocalStorage = async (
+  buffer: Buffer,
+  folder: string,
+  originalName: string,
+): Promise<string> => {
+  const safeFolder = folder.replace(/[^a-zA-Z0-9-_/]/g, "");
+  const extension = path.extname(originalName).toLowerCase() || ".jpg";
+  const filename = `${randomUUID()}${extension}`;
+  const targetDir = path.resolve(process.cwd(), "uploads", safeFolder);
+
+  await mkdir(targetDir, { recursive: true });
+  await writeFile(path.join(targetDir, filename), buffer);
+
+  return `/uploads/${safeFolder}/${filename}`.replace(/\\/g, "/");
 };
 
 export { cloudinary };
