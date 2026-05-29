@@ -146,6 +146,7 @@ model PortfolioItem {
   title         String
   slug          String   @unique
   category      String
+  content       String?
   guestCount    Int?
   coverImageUrl String
   status        String   @default("visible")  // visible | hidden
