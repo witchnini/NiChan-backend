@@ -90,10 +90,22 @@ async function main() {
   // ── STEP 2: Service Categories ────────────────────────────────────────────
 
   log("📂 Service Categories");
-  const [catWedding, , catConference, catOpening] = await Promise.all([
+
+  // Clean up old categories whose slugs have changed
+  const oldSlugs = ["hoi-nghi", "khai-truong"];
+  for (const slug of oldSlugs) {
+    const old = await prisma.serviceCategory.findUnique({ where: { slug } });
+    if (old) {
+      await prisma.service.deleteMany({ where: { categoryId: old.id } });
+      await prisma.serviceCategory.delete({ where: { slug } });
+      log(`  🗑️  Removed old category: ${slug}`);
+    }
+  }
+
+  const [catWedding, , catAnniversary, catConference, catGroundbreaking, catOpening, catInauguration, catGala, catYearEnd] = await Promise.all([
     prisma.serviceCategory.upsert({
       where: { slug: "tiec-cuoi" },
-      update: {},
+      update: { name: "Tiệc Cưới", description: "Tổ chức tiệc cưới sang trọng, chuyên nghiệp" },
       create: {
         name: "Tiệc Cưới",
         slug: "tiec-cuoi",
@@ -103,7 +115,7 @@ async function main() {
     }),
     prisma.serviceCategory.upsert({
       where: { slug: "sinh-nhat" },
-      update: {},
+      update: { name: "Sinh Nhật", description: "Tiệc sinh nhật từ trang trí đến catering" },
       create: {
         name: "Sinh Nhật",
         slug: "sinh-nhat",
@@ -112,27 +124,77 @@ async function main() {
       },
     }),
     prisma.serviceCategory.upsert({
-      where: { slug: "hoi-nghi" },
-      update: {},
+      where: { slug: "ky-niem" },
+      update: { name: "Kỷ Niệm", description: "Tổ chức tiệc kỷ niệm, lễ kỷ niệm thành lập" },
       create: {
-        name: "Hội Nghị & Sự Kiện",
-        slug: "hoi-nghi",
-        description: "Tổ chức hội nghị, ra mắt sản phẩm, team building",
+        name: "Kỷ Niệm",
+        slug: "ky-niem",
+        description: "Tổ chức tiệc kỷ niệm, lễ kỷ niệm thành lập",
         sortOrder: 3,
       },
     }),
     prisma.serviceCategory.upsert({
-      where: { slug: "khai-truong" },
-      update: {},
+      where: { slug: "hoi-nghi-hoi-thao" },
+      update: { name: "Hội Nghị & Hội Thảo", description: "Tổ chức hội nghị, hội thảo chuyên nghiệp" },
       create: {
-        name: "Lễ Khai Trương & Ký Kết",
-        slug: "khai-truong",
-        description: "Lễ khai trương, ký kết hợp đồng doanh nghiệp",
+        name: "Hội Nghị & Hội Thảo",
+        slug: "hoi-nghi-hoi-thao",
+        description: "Tổ chức hội nghị, hội thảo chuyên nghiệp",
         sortOrder: 4,
       },
     }),
+    prisma.serviceCategory.upsert({
+      where: { slug: "le-dong-tho-khoi-cong" },
+      update: { name: "Lễ Động Thổ & Khởi Công", description: "Tổ chức lễ động thổ, lễ khởi công dự án" },
+      create: {
+        name: "Lễ Động Thổ & Khởi Công",
+        slug: "le-dong-tho-khoi-cong",
+        description: "Tổ chức lễ động thổ, lễ khởi công dự án",
+        sortOrder: 5,
+      },
+    }),
+    prisma.serviceCategory.upsert({
+      where: { slug: "le-khai-truong" },
+      update: { name: "Lễ Khai Trương", description: "Tổ chức lễ khai trương cửa hàng, showroom, chi nhánh" },
+      create: {
+        name: "Lễ Khai Trương",
+        slug: "le-khai-truong",
+        description: "Tổ chức lễ khai trương cửa hàng, showroom, chi nhánh",
+        sortOrder: 6,
+      },
+    }),
+    prisma.serviceCategory.upsert({
+      where: { slug: "le-khanh-thanh" },
+      update: { name: "Lễ Khánh Thành", description: "Tổ chức lễ khánh thành công trình, dự án" },
+      create: {
+        name: "Lễ Khánh Thành",
+        slug: "le-khanh-thanh",
+        description: "Tổ chức lễ khánh thành công trình, dự án",
+        sortOrder: 7,
+      },
+    }),
+    prisma.serviceCategory.upsert({
+      where: { slug: "gala-dinner" },
+      update: { name: "Gala Dinner", description: "Tổ chức tiệc Gala Dinner sang trọng, đẳng cấp" },
+      create: {
+        name: "Gala Dinner",
+        slug: "gala-dinner",
+        description: "Tổ chức tiệc Gala Dinner sang trọng, đẳng cấp",
+        sortOrder: 8,
+      },
+    }),
+    prisma.serviceCategory.upsert({
+      where: { slug: "year-end-party" },
+      update: { name: "Year End Party", description: "Tổ chức tiệc tất niên, Year End Party cho doanh nghiệp" },
+      create: {
+        name: "Year End Party",
+        slug: "year-end-party",
+        description: "Tổ chức tiệc tất niên, Year End Party cho doanh nghiệp",
+        sortOrder: 9,
+      },
+    }),
   ]);
-  log("  ✅ 4 categories ready\n");
+  log("  ✅ 9 categories ready\n");
 
   // ── STEP 3: Services ──────────────────────────────────────────────────────
 
