@@ -16,6 +16,7 @@ import { organizerProjectsRouter } from "../modules/organizer/projects/organizer
 import { organizerVendorsRouter } from "../modules/organizer/vendors/organizer-vendors.router";
 import { organizerBudgetRouter } from "../modules/organizer/budget/organizer-budget.router";
 import { organizerStaffRouter } from "../modules/organizer/staff/organizer-staff.router";
+import { organizerCommunicationRouter } from "../modules/organizer/communication/organizer-communication.router";
 import { organizerReportsRouter } from "../modules/reports/reports.router";
 
 // Admin
@@ -56,6 +57,7 @@ apiRouter.use("/organizer", organizerProjectsRouter);
 apiRouter.use("/organizer", organizerVendorsRouter);
 apiRouter.use("/organizer", organizerBudgetRouter);
 apiRouter.use("/organizer", organizerReportsRouter);
+apiRouter.use("/organizer", organizerCommunicationRouter);
 apiRouter.use("/organizer/staff", organizerStaffRouter);
 apiRouter.use("/organizer", makeProfileRouter("organizer", "admin"));
 

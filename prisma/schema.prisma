@@ -608,12 +608,15 @@ model ChatThreadMember {
 }
 
 model ChatMessage {
-  id           String    @id @default(uuid())
-  threadId     String    
-  senderUserId String    
-  messageText  String    
-  sentAt       DateTime  @default(now())
-  deletedAt    DateTime?
+  id             String    @id @default(uuid())
+  threadId       String
+  senderUserId   String
+  messageText    String
+  attachmentUrl  String?
+  attachmentType String?
+  attachmentName String?
+  sentAt         DateTime  @default(now())
+  deletedAt      DateTime?
 
   thread ChatThread @relation(fields: [threadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   sender User       @relation(fields: [senderUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)

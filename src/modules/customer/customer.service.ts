@@ -1,6 +1,6 @@
 import { prisma } from "../../lib/prisma";
 import { createError } from "../../middleware/errorHandler";
-import { emitNewMessage } from "../../lib/socket";
+import { emitNewMessage, emitMessageDeleted } from "../../lib/socket";
 import { z } from "zod";
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -168,14 +168,22 @@ export const getChatMessages = async (
   return messages.reverse();
 };
 
-const sendMessageBodySchema = z.object({
-  message: z.string().min(1).max(2000),
-});
+const sendMessageBodySchema = z
+  .object({
+    message: z.string().max(2000).optional().default(""),
+    attachmentUrl: z.string().url().max(1000).optional(),
+    attachmentType: z.string().max(200).optional(),
+    attachmentName: z.string().max(500).optional(),
+  })
+  .refine((data) => data.message.trim().length > 0 || Boolean(data.attachmentUrl), {
+    message: "Message text or an attachment is required",
+  });
 
 export const sendChatMessage = async (eventId: string, userId: string, body: unknown) => {
   await ensureEventAccess(eventId, userId);
 
-  const { message } = sendMessageBodySchema.parse(body);
+  const { message, attachmentUrl, attachmentType, attachmentName } =
+    sendMessageBodySchema.parse(body);
   const thread = await ensureThread(eventId);
 
   await prisma.chatThreadMember.upsert({
@@ -190,20 +198,52 @@ export const sendChatMessage = async (eventId: string, userId: string, body: unk
   });
 
   const chatMessage = await prisma.chatMessage.create({
-    data: { threadId: thread.id, senderUserId: userId, messageText: message },
+    data: {
+      threadId: thread.id,
+      senderUserId: userId,
+      messageText: message,
+      attachmentUrl: attachmentUrl ?? null,
+      attachmentType: attachmentType ?? null,
+      attachmentName: attachmentName ?? null,
+    },
     include: { sender: { select: { id: true, displayName: true, avatarUrl: true } } },
   });
 
-  emitNewMessage(thread.id, {
+  emitNewMessage(eventId, {
     id: chatMessage.id,
-    threadId: thread.id,
+    eventId,
     senderUserId: userId,
-    senderName: sender?.displayName ?? "",
+    sender: { displayName: sender?.displayName ?? "" },
     messageText: message,
+    attachmentUrl: attachmentUrl ?? null,
+    attachmentType: attachmentType ?? null,
+    attachmentName: attachmentName ?? null,
     sentAt: chatMessage.sentAt,
   });
 
   return chatMessage;
+};
+
+export const deleteChatMessage = async (eventId: string, messageId: string, userId: string) => {
+  await ensureEventAccess(eventId, userId);
+
+  const message = await prisma.chatMessage.findFirst({
+    where: { id: messageId, deletedAt: null },
+    include: { thread: { select: { eventId: true } } },
+  });
+
+  if (!message) throw createError("NOT_FOUND", "Message not found", 404);
+  if (message.senderUserId !== userId) throw createError("FORBIDDEN", "You can only delete your own messages", 403);
+  if (message.thread.eventId !== eventId) throw createError("FORBIDDEN", "Message does not belong to this event", 403);
+
+  await prisma.chatMessage.update({
+    where: { id: messageId },
+    data: { deletedAt: new Date() },
+  });
+
+  emitMessageDeleted(eventId, messageId);
+
+  return { success: true };
 };
 
 // ─── Reviews ─────────────────────────────────────────────────────────────────

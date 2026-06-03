@@ -48,13 +48,13 @@ export const initSocket = (httpServer: HttpServer): SocketServer => {
     onlineUsers.get(userId)!.add(socket.id);
 
     // Join event chat room
-    // Client gửi: socket.emit("join_thread", { threadId })
-    socket.on("join_thread", ({ threadId }: { threadId: string }) => {
-      socket.join(`thread:${threadId}`);
+    // Client gửi: socket.emit("join_event", { eventId })
+    socket.on("join_event", ({ eventId }: { eventId: string }) => {
+      if (eventId) socket.join(`event:${eventId}`);
     });
 
-    socket.on("leave_thread", ({ threadId }: { threadId: string }) => {
-      socket.leave(`thread:${threadId}`);
+    socket.on("leave_event", ({ eventId }: { eventId: string }) => {
+      if (eventId) socket.leave(`event:${eventId}`);
     });
 
     // Handle disconnect
@@ -73,21 +73,36 @@ export const initSocket = (httpServer: HttpServer): SocketServer => {
 };
 
 /**
- * Gửi message mới đến tất cả members trong thread
+ * Gửi message mới đến tất cả members trong event chat room.
+ * Payload được định dạng khớp với type Message ở frontend để append trực tiếp.
  */
 export const emitNewMessage = (
-  threadId: string,
+  eventId: string,
   message: {
     id: string;
-    threadId: string;
+    eventId: string;
     senderUserId: string;
-    senderName: string;
+    sender: { displayName: string } | null;
     messageText: string;
+    attachmentUrl?: string | null;
+    attachmentType?: string | null;
+    attachmentName?: string | null;
     sentAt: Date;
   },
 ) => {
   if (!io) return;
-  io.to(`thread:${threadId}`).emit("new_message", message);
+  io.to(`event:${eventId}`).emit("new_message", message);
+};
+
+/**
+ * Thông báo xóa tin nhắn đến tất cả members trong event chat room.
+ */
+export const emitMessageDeleted = (
+  eventId: string,
+  messageId: string,
+) => {
+  if (!io) return;
+  io.to(`event:${eventId}`).emit("message_deleted", { messageId });
 };
 
 /**

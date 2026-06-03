@@ -1,6 +1,11 @@
 import { Request, Response, Router } from "express";
 import { authenticate } from "../../middleware/auth";
-import { upload, uploadToCloudinary } from "../../lib/cloudinary";
+import {
+  upload,
+  uploadDoc,
+  uploadToCloudinary,
+  uploadDocumentToCloudinary,
+} from "../../lib/cloudinary";
 import { sendSuccess } from "../../utils/response";
 import { createError } from "../../middleware/errorHandler";
 
@@ -42,6 +47,30 @@ uploadRouter.post(
 
     const url = await uploadToCloudinary(req.file.buffer, "nichan/avatars", req.file.originalname);
     sendSuccess(res, { data: { url: toPublicUrl(req, url) }, status: 201 });
+  },
+);
+
+/**
+ * POST /api/upload/file
+ * Body: multipart/form-data { file: File, folder?: string }
+ * Cho phép ảnh + PDF/Word/Excel. Dùng cho đính kèm trong chat.
+ * Returns: { url, type, name }
+ */
+uploadRouter.post(
+  "/file",
+  uploadDoc.single("file"),
+  async (req: Request, res: Response) => {
+    if (!req.file) {
+      throw createError("VALIDATION_ERROR", "No file uploaded", 400);
+    }
+
+    const folder = `nichan/${String(req.body.folder ?? "chat").replace(/[^a-zA-Z0-9-_/]/g, "")}`;
+    const url = await uploadDocumentToCloudinary(req.file.buffer, folder, req.file.originalname);
+
+    sendSuccess(res, {
+      data: { url: toPublicUrl(req, url), type: req.file.mimetype, name: req.file.originalname },
+      status: 201,
+    });
   },
 );
 

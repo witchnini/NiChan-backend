@@ -3,6 +3,7 @@ import { authenticate, requireRole } from "../../middleware/auth";
 import { p, q } from "../../utils/request";
 import { sendSuccess } from "../../utils/response";
 import {
+  deleteChatMessage,
   getChatMessages,
   getCustomerContracts,
   getCustomerDashboard,
@@ -61,6 +62,12 @@ customerRouter.get("/events/:eventId/chat-messages", async (req: Request, res: R
 customerRouter.post("/events/:eventId/chat-messages", async (req: Request, res: Response) => {
   const data = await sendChatMessage(p(req, "eventId"), req.user!.userId, req.body);
   sendSuccess(res, { data, status: 201 });
+});
+
+// DELETE /api/customer/events/:eventId/chat-messages/:messageId
+customerRouter.delete("/events/:eventId/chat-messages/:messageId", async (req: Request, res: Response) => {
+  const data = await deleteChatMessage(p(req, "eventId"), p(req, "messageId"), req.user!.userId);
+  sendSuccess(res, { data });
 });
 
 // GET /api/customer/contracts
