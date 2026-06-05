@@ -45,21 +45,45 @@ export const getProjectSummary = async () => {
   });
 };
 
+const monthKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+
 export const getMonthlyPL = async () => {
   const now = new Date();
   const twelveMonthsAgo = new Date(now);
   twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
+  twelveMonthsAgo.setDate(1);
+  twelveMonthsAgo.setHours(0, 0, 0, 0);
 
-  const transactions = await prisma.transaction.findMany({
-    where: { transactionDate: { gte: twelveMonthsAgo } },
-    select: { amount: true, status: true, transactionDate: true },
-  });
+  const [transactions, budgetItems] = await Promise.all([
+    prisma.transaction.findMany({
+      where: { transactionDate: { gte: twelveMonthsAgo } },
+      select: { amount: true, status: true, transactionDate: true },
+    }),
+    prisma.budgetItem.findMany({
+      where: { status: "paid", updatedAt: { gte: twelveMonthsAgo } },
+      select: { actualAmount: true, updatedAt: true },
+    }),
+  ]);
 
   const map: Record<string, { revenue: number; expenses: number }> = {};
+  // Pre-seed the last 12 months so the chart shows a continuous timeline.
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(twelveMonthsAgo);
+    d.setMonth(d.getMonth() + i);
+    map[monthKey(d)] = { revenue: 0, expenses: 0 };
+  }
+
   for (const tx of transactions) {
-    const key = `${tx.transactionDate.getFullYear()}-${String(tx.transactionDate.getMonth() + 1).padStart(2, "0")}`;
+    const key = monthKey(tx.transactionDate);
     if (!map[key]) map[key] = { revenue: 0, expenses: 0 };
     if (tx.status === "completed") map[key].revenue += Number(tx.amount);
+  }
+
+  for (const item of budgetItems) {
+    const key = monthKey(item.updatedAt);
+    if (!map[key]) map[key] = { revenue: 0, expenses: 0 };
+    map[key].expenses += Number(item.actualAmount);
   }
 
   return Object.entries(map)
@@ -119,8 +143,11 @@ export const updateTransaction = async (id: string, input: Partial<TransactionIn
   return prisma.transaction.update({
     where: { id },
     data: {
+      ...(input.eventId !== undefined ? { eventId: input.eventId } : {}),
+      ...(input.contractId !== undefined ? { contractId: input.contractId } : {}),
       ...(input.description !== undefined ? { description: input.description } : {}),
       ...(input.amount !== undefined ? { amount: input.amount } : {}),
+      ...(input.transactionDate !== undefined ? { transactionDate: new Date(input.transactionDate) } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
       ...(input.paymentMethod !== undefined ? { paymentMethod: input.paymentMethod } : {}),
     },

@@ -50,6 +50,95 @@ export const getOrganizerBudgetOverview = async (organizerUserId: string) => {
   });
 };
 
+// High-level KPIs for the organizer reports/summary header.
+export const getOrganizerSummary = async (organizerUserId: string) => {
+  const [events, totalTasks, doneTasks, budgetAgg, reviewAgg, vendorCount, staffRows] =
+    await prisma.$transaction([
+      prisma.event.findMany({
+        where: { organizerUserId },
+        select: { status: true },
+      }),
+      prisma.projectTask.count({ where: { event: { organizerUserId } } }),
+      prisma.projectTask.count({ where: { event: { organizerUserId }, status: "done" } }),
+      prisma.budgetItem.aggregate({
+        where: { projectBudget: { event: { organizerUserId } } },
+        _sum: { estimatedAmount: true, actualAmount: true },
+      }),
+      prisma.review.aggregate({
+        where: { event: { organizerUserId }, status: "approved" },
+        _avg: { ratingOverall: true },
+        _count: { _all: true },
+      }),
+      prisma.eventVendor.count({ where: { event: { organizerUserId } } }),
+      prisma.eventStaffAssignment.findMany({
+        where: { event: { organizerUserId } },
+        select: { staffUserId: true },
+        distinct: ["staffUserId"],
+      }),
+    ]);
+
+  const totalEvents = events.length;
+  const countOf = (status: string) => events.filter((e) => e.status === status).length;
+  const completedEvents = countOf("completed");
+  const cancelledEvents = countOf("cancelled");
+  const activeEvents = totalEvents - completedEvents - cancelledEvents;
+
+  const estimated = Number(budgetAgg._sum.estimatedAmount ?? 0);
+  const actual = Number(budgetAgg._sum.actualAmount ?? 0);
+
+  return {
+    totalEvents,
+    activeEvents,
+    completedEvents,
+    cancelledEvents,
+    totalTasks,
+    doneTasks,
+    completionRate: totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0,
+    budgetEstimated: estimated,
+    budgetActual: actual,
+    budgetVariance: estimated - actual,
+    vendorCount,
+    staffCount: staffRows.length,
+    reviewCount: reviewAgg._count._all,
+    avgRating: reviewAgg._avg.ratingOverall ? Number(reviewAgg._avg.ratingOverall.toFixed(1)) : 0,
+  };
+};
+
+// Staff performance scoped to the organizer's own events.
+export const getOrganizerStaffPerformance = async (organizerUserId: string) => {
+  const assignments = await prisma.eventStaffAssignment.findMany({
+    where: { event: { organizerUserId } },
+    include: {
+      staffUser: { select: { id: true, displayName: true, avatarUrl: true } },
+      event: { select: { status: true } },
+    },
+  });
+
+  const staffMap: Record<
+    string,
+    { id: string; name: string; avatarUrl: string | null; assignments: number; confirmed: number; completed: number }
+  > = {};
+
+  for (const a of assignments) {
+    const key = a.staffUserId;
+    if (!staffMap[key]) {
+      staffMap[key] = {
+        id: a.staffUserId,
+        name: a.staffUser.displayName,
+        avatarUrl: a.staffUser.avatarUrl,
+        assignments: 0,
+        confirmed: 0,
+        completed: 0,
+      };
+    }
+    staffMap[key].assignments += 1;
+    if (a.status === "confirmed") staffMap[key].confirmed += 1;
+    if (a.event.status === "completed") staffMap[key].completed += 1;
+  }
+
+  return Object.values(staffMap).sort((a, b) => b.completed - a.completed || b.assignments - a.assignments);
+};
+
 // ─── Admin Reports ────────────────────────────────────────────────────────────
 
 export const getAdminConversionReport = async () => {

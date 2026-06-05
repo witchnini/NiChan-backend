@@ -6,6 +6,8 @@ import {
   getOrganizerProjectProgress,
   getOrganizerTaskCompletion,
   getOrganizerBudgetOverview,
+  getOrganizerSummary,
+  getOrganizerStaffPerformance,
   getAdminConversionReport,
   getAdminRevenueByType,
   getAdminTopEvents,
@@ -28,6 +30,16 @@ organizerReportsRouter.get("/reports/task-completion", async (req: Request, res:
 
 organizerReportsRouter.get("/reports/budget-overview", async (req: Request, res: Response) => {
   const data = await getOrganizerBudgetOverview(req.user!.userId);
+  sendSuccess(res, { data });
+});
+
+organizerReportsRouter.get("/reports/summary", async (req: Request, res: Response) => {
+  const data = await getOrganizerSummary(req.user!.userId);
+  sendSuccess(res, { data });
+});
+
+organizerReportsRouter.get("/reports/staff-performance", async (req: Request, res: Response) => {
+  const data = await getOrganizerStaffPerformance(req.user!.userId);
   sendSuccess(res, { data });
 });
 
